@@ -1,0 +1,137 @@
+{% extends 'base.html' %}
+
+{% block title %}炭窑档案 - 炭窑作坊管理系统{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2><i class="bi bi-buildings me-2"></i>炭窑档案管理</h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{% url 'kiln_app:kiln_create' %}" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i> 新建炭窑
+        </a>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label">状态筛选</label>
+                <select name="status" class="form-select">
+                    <option value="">全部状态</option>
+                    <option value="active" {% if status_filter == 'active' %}selected{% endif %}>使用中</option>
+                    <option value="idle" {% if status_filter == 'idle' %}selected{% endif %}>闲置</option>
+                    <option value="maintenance" {% if status_filter == 'maintenance' %}selected{% endif %}>维修中</option>
+                    <option value="retired" {% if status_filter == 'retired' %}selected{% endif %}>报废</option>
+                </select>
+            </div>
+            <div class="col-md-4 d-flex align-items-end">
+                <button type="submit" class="btn btn-outline-primary me-2">
+                    <i class="bi bi-filter"></i> 筛选
+                </button>
+                <a href="{% url 'kiln_app:kiln_list' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-x-circle"></i> 重置
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>窑号</th>
+                        <th>位置</th>
+                        <th>装窑容量</th>
+                        <th>建造日期</th>
+                        <th>状态</th>
+                        <th>关联批次</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for kiln in kilns %}
+                    <tr>
+                        <td><strong>{{ kiln.name }}</strong></td>
+                        <td>{{ kiln.location|default:"-" }}</td>
+                        <td>{{ kiln.capacity }} kg</td>
+                        <td>{{ kiln.build_date|date:"Y-m-d"|default:"-" }}</td>
+                        <td>
+                            {% if kiln.status == 'active' %}
+                                <span class="badge bg-success">使用中</span>
+                            {% elif kiln.status == 'idle' %}
+                                <span class="badge bg-secondary">闲置</span>
+                            {% elif kiln.status == 'maintenance' %}
+                                <span class="badge bg-warning text-dark">维修中</span>
+                            {% else %}
+                                <span class="badge bg-danger">报废</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge bg-info">{{ kiln.batch_set.count }}</span>
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <a href="{% url 'kiln_app:kiln_edit' kiln.pk %}" class="btn btn-outline-primary">
+                                    <i class="bi bi-pencil"></i> 编辑
+                                </a>
+                                <button type="button" class="btn btn-outline-danger"
+                                        onclick="confirmDelete('{{ kiln.pk }}', '{{ kiln.name }}')">
+                                    <i class="bi bi-trash"></i> 删除
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center text-muted py-5">
+                            <i class="bi bi-inbox fs-1"></i>
+                            <p class="mt-2 mb-0">暂无炭窑档案，请点击上方按钮新建</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-exclamation-triangle text-warning me-2"></i>确认删除</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>确定要删除炭窑 <strong id="deleteName"></strong> 吗？</p>
+                <p class="text-danger small mb-0"><i class="bi bi-info-circle"></i> 若该炭窑有关联的批次记录，则无法删除。</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <form id="deleteForm" method="post" style="display:inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-trash"></i> 确认删除
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function confirmDelete(pk, name) {
+    document.getElementById('deleteName').textContent = name;
+    document.getElementById('deleteForm').action = "{% url 'kiln_app:kiln_list' %}" + pk + "/delete/";
+    new bootstrap.Modal(document.getElementById('deleteModal')).show();
+}
+</script>
+{% endblock %}

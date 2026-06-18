@@ -1,0 +1,181 @@
+{% extends 'base.html' %}
+
+{% block title %}烧炭批次 - 炭窑作坊管理系统{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2><i class="bi bi-list-ul me-2"></i>烧炭批次管理</h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{% url 'kiln_app:batch_create' %}" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i> 新建批次
+        </a>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label">原料类型</label>
+                <select name="material_type" class="form-select">
+                    <option value="">全部类型</option>
+                    <option value="oak" {% if material_filter == 'oak' %}selected{% endif %}>橡木</option>
+                    <option value="pine" {% if material_filter == 'pine' %}selected{% endif %}>松木</option>
+                    <option value="bamboo" {% if material_filter == 'bamboo' %}selected{% endif %}>竹材</option>
+                    <option value="fruitwood" {% if material_filter == 'fruitwood' %}selected{% endif %}>果木</option>
+                    <option value="mixed" {% if material_filter == 'mixed' %}selected{% endif %}>杂木</option>
+                    <option value="other" {% if material_filter == 'other' %}selected{% endif %}>其他</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">炭窑</label>
+                <select name="kiln" class="form-select">
+                    <option value="">全部炭窑</option>
+                    {% for k in kilns %}
+                        <option value="{{ k.pk }}" {% if kiln_filter == k.pk|stringformat:"s" %}selected{% endif %}>{{ k.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4 d-flex align-items-end">
+                <button type="submit" class="btn btn-outline-primary me-2">
+                    <i class="bi bi-filter"></i> 筛选
+                </button>
+                <a href="{% url 'kiln_app:batch_list' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-x-circle"></i> 重置
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>批次编号</th>
+                        <th>炭窑</th>
+                        <th>原料类型</th>
+                        <th>原料重量</th>
+                        <th>成炭重量</th>
+                        <th>点火日期</th>
+                        <th>出窑日期</th>
+                        <th>成炭率</th>
+                        <th>评级</th>
+                        <th>状态</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for batch in batches %}
+                    <tr>
+                        <td><code class="fw-bold">{{ batch.batch_no }}</code></td>
+                        <td>{{ batch.kiln.name }}</td>
+                        <td>{{ batch.get_material_type_display }}</td>
+                        <td>{{ batch.material_weight }} kg</td>
+                        <td>{{ batch.charcoal_weight|default:"-" }}{% if batch.charcoal_weight %} kg{% endif %}</td>
+                        <td>{{ batch.ignition_date|date:"Y-m-d H:i" }}</td>
+                        <td>
+                            {% if batch.finish_date %}
+                                {{ batch.finish_date|date:"Y-m-d H:i" }}
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if batch.yield_rate %}
+                                <strong class="
+                                    {% if batch.yield_rate >= 25 %}text-success
+                                    {% elif batch.yield_rate >= 18 %}text-warning
+                                    {% else %}text-danger{% endif %}
+                                ">{{ batch.yield_rate }}%</strong>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if batch.rating %}
+                                <span class="badge bg-{% if batch.rating.grade == 'excellent' %}success
+                                    {% elif batch.rating.grade == 'good' %}primary
+                                    {% elif batch.rating.grade == 'medium' %}info
+                                    {% elif batch.rating.grade == 'poor' %}warning text-dark
+                                    {% else %}danger{% endif %}">
+                                    {{ batch.rating.get_grade_display }}
+                                </span>
+                            {% else %}
+                                <span class="text-muted small">未评</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if batch.finish_date %}
+                                <span class="badge bg-success">已完成</span>
+                            {% else %}
+                                <span class="badge bg-info">{{ batch.current_stage }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <a href="{% url 'kiln_app:batch_detail' batch.pk %}" class="btn btn-outline-info">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                <a href="{% url 'kiln_app:batch_edit' batch.pk %}" class="btn btn-outline-primary">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <button type="button" class="btn btn-outline-danger"
+                                        onclick="confirmDelete('{{ batch.pk }}', '{{ batch.batch_no }}')">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="11" class="text-center text-muted py-5">
+                            <i class="bi bi-inbox fs-1"></i>
+                            <p class="mt-2 mb-0">暂无批次记录，请点击上方按钮新建</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-exclamation-triangle text-warning me-2"></i>确认删除</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>确定要删除批次 <strong id="deleteName"></strong> 吗？该操作会同时删除所有关联记录。</p>
+                <p class="text-danger small mb-0"><i class="bi bi-exclamation-circle"></i> 此操作不可撤销！</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <form id="deleteForm" method="post" style="display:inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-trash"></i> 确认删除
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function confirmDelete(pk, name) {
+    document.getElementById('deleteName').textContent = name;
+    document.getElementById('deleteForm').action = "{% url 'kiln_app:batch_list' %}" + pk + "/delete/";
+    new bootstrap.Modal(document.getElementById('deleteModal')).show();
+}
+</script>
+{% endblock %}

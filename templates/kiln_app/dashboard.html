@@ -1,0 +1,182 @@
+{% extends 'base.html' %}
+
+{% block title %}仪表盘 - 炭窑作坊管理系统{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12 mb-4">
+        <h2 class="mb-0"><i class="bi bi-speedometer2 me-2"></i>系统概览</h2>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card stat-kiln">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <p class="card-text text-muted mb-1">炭窑总数</p>
+                        <h3 class="card-title mb-0">{{ total_kilns }}</h3>
+                        <p class="mt-2 mb-0">
+                            <span class="badge bg-success">{{ active_kilns }} 台使用中</span>
+                        </p>
+                    </div>
+                    <i class="bi bi-buildings icon-lg text-primary"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card stat-batch">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <p class="card-text text-muted mb-1">批次总数</p>
+                        <h3 class="card-title mb-0">{{ total_batches }}</h3>
+                        <p class="mt-2 mb-0">
+                            <span class="badge bg-info">{{ ongoing_batches }} 进行中</span>
+                            <span class="badge bg-secondary ms-1">{{ completed_batches }} 已完成</span>
+                        </p>
+                    </div>
+                    <i class="bi bi-list-ul icon-lg text-success"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card stat-yield">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <p class="card-text text-muted mb-1">平均成炭率</p>
+                        <h3 class="card-title mb-0">{{ avg_yield_rate }}%</h3>
+                        <p class="mt-2 mb-0 text-muted small">基于已完成批次统计</p>
+                    </div>
+                    <i class="bi bi-percent icon-lg text-warning"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card {% if abnormal_smoke_count > 0 %}stat-danger{% endif %}">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <p class="card-text text-muted mb-1">异常烟色记录</p>
+                        <h3 class="card-title mb-0">{{ abnormal_smoke_count }}</h3>
+                        <p class="mt-2 mb-0">
+                            {% if abnormal_smoke_count > 0 %}
+                                <span class="badge bg-danger">需要关注</span>
+                            {% else %}
+                                <span class="badge bg-success">一切正常</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                    <i class="bi {% if abnormal_smoke_count > 0 %}bi-exclamation-triangle-fill text-danger{% else %}bi-shield-check text-success{% endif %} icon-lg"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>最近批次</h5>
+                <a href="{% url 'kiln_app:batch_list' %}" class="btn btn-sm btn-outline-primary">
+                    查看全部 <i class="bi bi-arrow-right"></i>
+                </a>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>批次编号</th>
+                                <th>炭窑</th>
+                                <th>原料类型</th>
+                                <th>点火日期</th>
+                                <th>状态</th>
+                                <th>成炭率</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for batch in recent_batches %}
+                            <tr>
+                                <td><code>{{ batch.batch_no }}</code></td>
+                                <td>{{ batch.kiln.name }}</td>
+                                <td>{{ batch.get_material_type_display }}</td>
+                                <td>{{ batch.ignition_date|date:"Y-m-d H:i" }}</td>
+                                <td>
+                                    {% if batch.finish_date %}
+                                        <span class="badge bg-success">已完成</span>
+                                    {% else %}
+                                        <span class="badge bg-info">{{ batch.current_stage }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if batch.yield_rate %}
+                                        <strong>{{ batch.yield_rate }}%</strong>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{% url 'kiln_app:batch_detail' batch.pk %}" class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-eye"></i> 详情
+                                    </a>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="7" class="text-center text-muted py-4">
+                                    <i class="bi bi-inbox fs-1"></i>
+                                    <p class="mt-2 mb-0">暂无批次记录</p>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-lightning me-2"></i>快捷操作</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{% url 'kiln_app:kiln_create' %}" class="btn btn-primary">
+                        <i class="bi bi-plus-circle"></i> 新建炭窑档案
+                    </a>
+                    <a href="{% url 'kiln_app:batch_create' %}" class="btn btn-success">
+                        <i class="bi bi-play-circle"></i> 创建烧炭批次
+                    </a>
+                    <a href="{% url 'kiln_app:yield_comparison' %}" class="btn btn-warning text-dark">
+                        <i class="bi bi-bar-chart-line"></i> 成炭率分析对比
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>系统提示</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled mb-0 small">
+                    <li class="mb-2"><i class="bi bi-check2-circle text-success"></i> 窑温正常范围：0-1200℃</li>
+                    <li class="mb-2"><i class="bi bi-check2-circle text-success"></i> 风门开度范围：0-100%</li>
+                    <li class="mb-2"><i class="bi bi-check2-circle text-success"></i> 烟色异常自动提示过火/欠火</li>
+                    <li><i class="bi bi-check2-circle text-success"></i> 批次编号系统自动校验唯一性</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

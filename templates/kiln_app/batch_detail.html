@@ -1,0 +1,591 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ batch.batch_no }} - 批次详情{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2>
+            <i class="bi bi-folder2-open me-2"></i>
+            批次详情：<code class="fs-4">{{ batch.batch_no }}</code>
+            {% if batch.finish_date %}
+                <span class="badge bg-success ms-2">已完成</span>
+            {% else %}
+                <span class="badge bg-info ms-2">{{ batch.current_stage }}</span>
+            {% endif %}
+        </h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <div class="btn-group">
+            <a href="{% url 'kiln_app:batch_list' %}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> 返回列表
+            </a>
+            <a href="{% url 'kiln_app:batch_edit' batch.pk %}" class="btn btn-outline-primary">
+                <i class="bi bi-pencil"></i> 编辑批次
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>批次基本信息</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">炭窑</p>
+                        <p class="mb-0 fw-bold">{{ batch.kiln.name }}</p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">原料类型</p>
+                        <p class="mb-0 fw-bold">{{ batch.get_material_type_display }}</p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">操作人</p>
+                        <p class="mb-0 fw-bold">{{ batch.operator|default:"-" }}</p>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">原料重量</p>
+                        <p class="mb-0 fw-bold text-primary">{{ batch.material_weight }} kg</p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">成炭重量</p>
+                        <p class="mb-0 fw-bold text-success">
+                            {% if batch.charcoal_weight %}{{ batch.charcoal_weight }} kg{% else %}-{% endif %}
+                        </p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">成炭率</p>
+                        <p class="mb-0 fw-bold">
+                            {% if batch.yield_rate %}
+                                <span class="
+                                    {% if batch.yield_rate >= 25 %}text-success
+                                    {% elif batch.yield_rate >= 18 %}text-warning
+                                    {% else %}text-danger{% endif %}
+                                ">{{ batch.yield_rate }}%</span>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">点火日期</p>
+                        <p class="mb-0 fw-bold">{{ batch.ignition_date|date:"Y-m-d H:i" }}</p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">出窑日期</p>
+                        <p class="mb-0 fw-bold">
+                            {% if batch.finish_date %}{{ batch.finish_date|date:"Y-m-d H:i" }}{% else %}-{% endif %}
+                        </p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">烧制时长</p>
+                        <p class="mb-0 fw-bold">
+                            {% if batch.duration_hours %}{{ batch.duration_hours }} 小时{% else %}-{% endif %}
+                        </p>
+                    </div>
+                </div>
+                {% if batch.notes %}
+                    <div class="row">
+                        <div class="col-md-12">
+                            <p class="text-muted small mb-1">备注</p>
+                            <p class="mb-0">{{ batch.notes }}</p>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        {% if has_rating %}
+        <div class="card mb-4 border-warning">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0"><i class="bi bi-star me-2"></i>出窑评级</h5>
+            </div>
+            <div class="card-body">
+                <div class="text-center mb-3">
+                    <span class="badge fs-4 bg-{% if batch.rating.grade == 'excellent' %}success
+                        {% elif batch.rating.grade == 'good' %}primary
+                        {% elif batch.rating.grade == 'medium' %}info
+                        {% elif batch.rating.grade == 'poor' %}warning text-dark
+                        {% else %}danger{% endif %}">
+                        {{ batch.rating.get_grade_display }}
+                    </span>
+                    {% if batch.rating.total_score %}
+                        <p class="mt-2 mb-0">综合评分：<strong class="fs-4">{{ batch.rating.total_score }}</strong> 分</p>
+                    {% endif %}
+                </div>
+                <div class="row small text-center">
+                    {% if batch.rating.appearance_score %}
+                        <div class="col-md-6 mb-2">
+                            <p class="text-muted mb-1">外观</p>
+                            <p class="mb-0 fw-bold">{{ batch.rating.appearance_score }}</p>
+                        </div>
+                    {% endif %}
+                    {% if batch.rating.hardness_score %}
+                        <div class="col-md-6 mb-2">
+                            <p class="text-muted mb-1">硬度</p>
+                            <p class="mb-0 fw-bold">{{ batch.rating.hardness_score }}</p>
+                        </div>
+                    {% endif %}
+                    {% if batch.rating.moisture_score %}
+                        <div class="col-md-6 mb-2">
+                            <p class="text-muted mb-1">含水率</p>
+                            <p class="mb-0 fw-bold">{{ batch.rating.moisture_score }}</p>
+                        </div>
+                    {% endif %}
+                    {% if batch.rating.ash_content_score %}
+                        <div class="col-md-6 mb-2">
+                            <p class="text-muted mb-1">灰分</p>
+                            <p class="mb-0 fw-bold">{{ batch.rating.ash_content_score }}</p>
+                        </div>
+                    {% endif %}
+                </div>
+                {% if batch.rating.remarks %}
+                    <hr><p class="small mb-0">{{ batch.rating.remarks }}</p>
+                {% endif %}
+                <div class="d-grid mt-3">
+                    <a href="{% url 'kiln_app:rating_edit' batch.pk %}" class="btn btn-sm btn-outline-warning">
+                        <i class="bi bi-pencil"></i> 编辑评级
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="card mb-4 border-info">
+            <div class="card-body text-center py-4">
+                <i class="bi bi-star text-muted display-4"></i>
+                <p class="mt-2 mb-3 text-muted">暂无出窑评级</p>
+                <a href="{% url 'kiln_app:rating_create' batch.pk %}" class="btn btn-info text-white">
+                    <i class="bi bi-plus-circle"></i> 添加评级
+                </a>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-plus-square me-2"></i>添加记录</h5>
+            </div>
+            <div class="card-body d-grid gap-2">
+                <a href="{% url 'kiln_app:temperature_create' batch.pk %}" class="btn btn-outline-danger">
+                    <i class="bi bi-thermometer-sun"></i> 记录窑温
+                </a>
+                <a href="{% url 'kiln_app:damper_create' batch.pk %}" class="btn btn-outline-success">
+                    <i class="bi bi-sliders"></i> 记录风门
+                </a>
+                <a href="{% url 'kiln_app:smoke_create' batch.pk %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-cloud-fog2"></i> 记录烟色
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-graph-up me-2"></i>烧制过程时间轴</h5>
+                <span class="badge bg-secondary">X轴：点火后小时数</span>
+            </div>
+            <div class="card-body">
+                <ul class="nav nav-tabs mb-3" id="chartTabs" role="tablist">
+                    <li class="nav-item">
+                        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tempChart">
+                            <i class="bi bi-thermometer-half text-danger"></i> 窑温变化
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#damperChart">
+                            <i class="bi bi-sliders text-success"></i> 风门开度
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#smokeChart">
+                            <i class="bi bi-cloud-fog2 text-secondary"></i> 烟色阶段
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#combinedChart">
+                            <i class="bi bi-layers text-primary"></i> 综合视图
+                        </button>
+                    </li>
+                </ul>
+                <div class="tab-content">
+                    <div class="tab-pane fade show active" id="tempChart">
+                        <div style="height: 350px;">
+                            <canvas id="temperatureCanvas"></canvas>
+                        </div>
+                    </div>
+                    <div class="tab-pane fade" id="damperChart">
+                        <div style="height: 350px;">
+                            <canvas id="damperCanvas"></canvas>
+                        </div>
+                    </div>
+                    <div class="tab-pane fade" id="smokeChart">
+                        <div style="height: 350px;">
+                            <canvas id="smokeCanvas"></canvas>
+                        </div>
+                        <div class="mt-3 small">
+                            <span class="me-3"><span class="d-inline-block rounded-circle bg-secondary me-1" style="width:12px;height:12px;background:rgba(200,200,200,0.8)"></span>干燥期（白烟）</span>
+                            <span class="me-3"><span class="d-inline-block rounded-circle me-1" style="width:12px;height:12px;background:rgba(255,200,0,0.8)"></span>预炭化（黄烟）</span>
+                            <span class="me-3"><span class="d-inline-block rounded-circle me-1" style="width:12px;height:12px;background:rgba(100,200,255,0.8)"></span>炭化期（青烟）</span>
+                            <span class="me-3"><span class="d-inline-block rounded-circle me-1" style="width:12px;height:12px;background:rgba(255,100,100,0.8)"></span>异常</span>
+                        </div>
+                    </div>
+                    <div class="tab-pane fade" id="combinedChart">
+                        <div style="height: 400px;">
+                            <canvas id="combinedCanvas"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-4 mb-4">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><i class="bi bi-thermometer-half text-danger me-2"></i>温度记录</h6>
+                <span class="badge bg-danger">{{ temperature_records|length }}</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th>时间(h)</th>
+                                <th>温度</th>
+                                <th>位置</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for rec in temperature_records %}
+                            <tr>
+                                <td class="small">
+                                    {% if batch.ignition_date %}
+                                        {{ rec.record_time|timeuntil:batch.ignition_date }}
+                                    {% else %}-{% endif %}
+                                </td>
+                                <td><strong class="text-danger">{{ rec.temperature }}℃</strong></td>
+                                <td class="small">{{ rec.position }}</td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="{% url 'kiln_app:temperature_edit' rec.pk %}" class="btn btn-link text-primary p-0">
+                                            <i class="bi bi-pencil"></i>
+                                        </a>
+                                        <a href="{% url 'kiln_app:temperature_delete' rec.pk %}" class="btn btn-link text-danger p-0 ms-1"
+                                           onclick="return confirm('确定删除该温度记录？')">
+                                            <i class="bi bi-trash"></i>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="4" class="text-center text-muted py-3 small">暂无记录</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4 mb-4">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><i class="bi bi-sliders text-success me-2"></i>风门记录</h6>
+                <span class="badge bg-success">{{ damper_records|length }}</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th>时间(h)</th>
+                                <th>开度</th>
+                                <th>风门</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for rec in damper_records %}
+                            <tr>
+                                <td class="small">
+                                    {% if batch.ignition_date %}
+                                        {{ rec.record_time|timeuntil:batch.ignition_date }}
+                                    {% else %}-{% endif %}
+                                </td>
+                                <td><strong class="text-success">{{ rec.damper_opening }}%</strong></td>
+                                <td class="small">{{ rec.damper_name }}</td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="{% url 'kiln_app:damper_edit' rec.pk %}" class="btn btn-link text-primary p-0">
+                                            <i class="bi bi-pencil"></i>
+                                        </a>
+                                        <a href="{% url 'kiln_app:damper_delete' rec.pk %}" class="btn btn-link text-danger p-0 ms-1"
+                                           onclick="return confirm('确定删除该风门记录？')">
+                                            <i class="bi bi-trash"></i>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="4" class="text-center text-muted py-3 small">暂无记录</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4 mb-4">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><i class="bi bi-cloud-fog2 text-secondary me-2"></i>烟色记录</h6>
+                <span class="badge bg-secondary">{{ smoke_stages|length }}</span>
+            </div>
+            <div class="card-body p-0">
+                <div style="max-height: 400px; overflow-y: auto;">
+                    {% for stage in smoke_stages %}
+                    <div class="p-3 border-bottom {% if not stage.is_normal %}bg-danger-subtle{% endif %}">
+                        <div class="d-flex justify-content-between align-items-start mb-1">
+                            <strong class="small">
+                                {% if batch.ignition_date %}
+                                    +{{ stage.record_time|timeuntil:batch.ignition_date }}
+                                {% endif %}
+                            </strong>
+                            {% if not stage.is_normal %}
+                                <span class="badge bg-danger"><i class="bi bi-exclamation-triangle"></i> 异常</span>
+                            {% endif %}
+                        </div>
+                        <p class="mb-1 fw-bold small">{{ stage.get_stage_display }}</p>
+                        {% if stage.smoke_density %}
+                            <p class="mb-1 small">烟浓密度：{{ stage.smoke_density }}/10</p>
+                        {% endif %}
+                        {% if stage.warning_message %}
+                            <p class="mb-1 small text-danger"><i class="bi bi-exclamation-circle"></i> {{ stage.warning_message }}</p>
+                        {% endif %}
+                        <div class="mt-2">
+                            <div class="btn-group btn-group-sm">
+                                <a href="{% url 'kiln_app:smoke_edit' stage.pk %}" class="btn btn-link text-primary p-0">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <a href="{% url 'kiln_app:smoke_delete' stage.pk %}" class="btn btn-link text-danger p-0 ms-2"
+                                   onclick="return confirm('确定删除该烟色记录？')">
+                                    <i class="bi bi-trash"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="text-center text-muted py-4 small">暂无记录</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const tempLabels = {{ temp_labels_json|safe }};
+const tempData = {{ temp_data_json|safe }};
+const damperLabels = {{ damper_labels_json|safe }};
+const damperData = {{ damper_data_json|safe }};
+const smokeLabels = {{ smoke_labels_json|safe }};
+const smokeColors = {{ smoke_colors_json|safe }};
+const smokeStages = {{ smoke_stages_json|safe }};
+const smokeIsNormal = {{ smoke_is_normal_json|safe }};
+const smokeWarnings = {{ smoke_warnings_json|safe }};
+
+const commonOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: {
+        mode: 'index',
+        intersect: false,
+    },
+    plugins: {
+        legend: { position: 'top' },
+        tooltip: {
+            callbacks: {
+                title: function(items) { return '点火后 ' + items[0].label + ' 小时'; }
+            }
+        }
+    },
+    scales: {
+        x: {
+            title: { display: true, text: '时间（小时）' },
+            beginAtZero: true
+        }
+    }
+};
+
+new Chart(document.getElementById('temperatureCanvas'), {
+    type: 'line',
+    data: {
+        labels: tempLabels,
+        datasets: [{
+            label: '窑温 (℃)',
+            data: tempData,
+            borderColor: 'rgba(220, 53, 69, 1)',
+            backgroundColor: 'rgba(220, 53, 69, 0.1)',
+            fill: true,
+            tension: 0.3,
+            pointRadius: 4,
+            pointHoverRadius: 6,
+        }]
+    },
+    options: {
+        ...commonOptions,
+        scales: {
+            ...commonOptions.scales,
+            y: {
+                title: { display: true, text: '温度 (℃)' },
+                min: 0,
+                max: 1000,
+            }
+        }
+    }
+});
+
+new Chart(document.getElementById('damperCanvas'), {
+    type: 'line',
+    data: {
+        labels: damperLabels,
+        datasets: [{
+            label: '风门开度 (%)',
+            data: damperData,
+            borderColor: 'rgba(25, 135, 84, 1)',
+            backgroundColor: 'rgba(25, 135, 84, 0.1)',
+            fill: true,
+            tension: 0.2,
+            step: true,
+            pointRadius: 5,
+            pointHoverRadius: 7,
+            pointStyle: 'rect',
+        }]
+    },
+    options: {
+        ...commonOptions,
+        scales: {
+            ...commonOptions.scales,
+            y: {
+                title: { display: true, text: '开度 (%)' },
+                min: 0,
+                max: 100,
+            }
+        }
+    }
+});
+
+const smokeData = smokeStages.map((_, i) => 1);
+new Chart(document.getElementById('smokeCanvas'), {
+    type: 'bar',
+    data: {
+        labels: smokeLabels,
+        datasets: [{
+            label: '烟色阶段',
+            data: smokeData,
+            backgroundColor: smokeColors,
+            borderColor: smokeColors.map(c => c.replace('0.', '1.').replace(', 0.', ', 1.')),
+            borderWidth: 2,
+        }]
+    },
+    options: {
+        ...commonOptions,
+        plugins: {
+            ...commonOptions.plugins,
+            legend: { display: false },
+            tooltip: {
+                callbacks: {
+                    title: function(items) { return '点火后 ' + items[0].label + ' 小时'; },
+                    label: function(ctx) {
+                        const i = ctx.dataIndex;
+                        let lines = [smokeStages[i]];
+                        if (!smokeIsNormal[i] && smokeWarnings[i]) {
+                            lines.push('⚠ ' + smokeWarnings[i]);
+                        }
+                        return lines;
+                    }
+                }
+            }
+        },
+        scales: {
+            ...commonOptions.scales,
+            y: { display: false, max: 1.5 }
+        }
+    }
+});
+
+new Chart(document.getElementById('combinedCanvas'), {
+    type: 'line',
+    data: {
+        labels: Array.from(new Set([...tempLabels, ...damperLabels])).sort((a,b) => a-b),
+        datasets: [
+            {
+                label: '窑温 (℃)',
+                data: tempData.map((v, i) => ({x: tempLabels[i], y: v})),
+                borderColor: 'rgba(220, 53, 69, 1)',
+                backgroundColor: 'rgba(220, 53, 69, 0.05)',
+                yAxisID: 'yTemp',
+                tension: 0.3,
+                pointRadius: 4,
+                parsing: false,
+            },
+            {
+                label: '风门开度 (%)',
+                data: damperData.map((v, i) => ({x: damperLabels[i], y: v})),
+                borderColor: 'rgba(25, 135, 84, 1)',
+                backgroundColor: 'rgba(25, 135, 84, 0.05)',
+                yAxisID: 'yDamper',
+                tension: 0.2,
+                step: true,
+                pointRadius: 5,
+                pointStyle: 'rect',
+                parsing: false,
+            }
+        ]
+    },
+    options: {
+        ...commonOptions,
+        scales: {
+            x: {
+                type: 'linear',
+                title: { display: true, text: '时间（小时）' },
+                beginAtZero: true
+            },
+            yTemp: {
+                type: 'linear',
+                position: 'left',
+                title: { display: true, text: '温度 (℃)' },
+                min: 0, max: 1000,
+                grid: { color: 'rgba(220, 53, 69, 0.1)' }
+            },
+            yDamper: {
+                type: 'linear',
+                position: 'right',
+                title: { display: true, text: '风门开度 (%)' },
+                min: 0, max: 100,
+                grid: { drawOnChartArea: false }
+            }
+        }
+    }
+});
+</script>
+{% endblock %}

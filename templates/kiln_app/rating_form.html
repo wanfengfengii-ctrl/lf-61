@@ -1,0 +1,139 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ action }}出窑评级 - 炭窑作坊管理系统{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2>
+            <i class="bi bi-star me-2 text-warning"></i>
+            {{ action }}出窑评级
+        </h2>
+        <p class="text-muted mb-0">批次：<code>{{ batch.batch_no }}</code></p>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{% url 'kiln_app:batch_detail' batch.pk %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> 返回批次详情
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card mb-4">
+            <div class="card-header bg-warning text-dark">
+                <h6 class="mb-0"><i class="bi bi-info-circle me-2"></i>评分说明：各项评分范围0-100分，综合评分为各项平均分</h6>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <form method="post" novalidate>
+                    {% csrf_token %}
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            {% for error in form.non_field_errors %}
+                                <p class="mb-0"><i class="bi bi-exclamation-circle"></i> {{ error }}</p>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+
+                    <div class="mb-4">
+                        <label class="form-label">{{ form.grade.label }} <span class="text-danger">*</span></label>
+                        {{ form.grade }}
+                        {% if form.grade.errors %}
+                            <div class="invalid-feedback d-block">
+                                {% for error in form.grade.errors %}{{ error }}{% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">{{ form.appearance_score.label }}</label>
+                            {{ form.appearance_score }}
+                            {% if form.appearance_score.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.appearance_score.errors %}{{ error }}{% endfor %}
+                                </div>
+                            {% endif %}
+                            <div class="form-text">外观完整度、色泽均匀度</div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">{{ form.hardness_score.label }}</label>
+                            {{ form.hardness_score }}
+                            {% if form.hardness_score.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.hardness_score.errors %}{{ error }}{% endfor %}
+                                </div>
+                            {% endif %}
+                            <div class="form-text">敲击声、抗压强度</div>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">{{ form.moisture_score.label }}</label>
+                            {{ form.moisture_score }}
+                            {% if form.moisture_score.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.moisture_score.errors %}{{ error }}{% endfor %}
+                                </div>
+                            {% endif %}
+                            <div class="form-text">含水率越低评分越高</div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">{{ form.ash_content_score.label }}</label>
+                            {{ form.ash_content_score }}
+                            {% if form.ash_content_score.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.ash_content_score.errors %}{{ error }}{% endfor %}
+                                </div>
+                            {% endif %}
+                            <div class="form-text">灰分越低评分越高</div>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">{{ form.evaluator.label }}</label>
+                            {{ form.evaluator }}
+                            {% if form.evaluator.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.evaluator.errors %}{{ error }}{% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">{{ form.evaluation_date.label }} <span class="text-danger">*</span></label>
+                            {{ form.evaluation_date }}
+                            {% if form.evaluation_date.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.evaluation_date.errors %}{{ error }}{% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label">{{ form.remarks.label }}</label>
+                        {{ form.remarks }}
+                        {% if form.remarks.errors %}
+                            <div class="invalid-feedback d-block">
+                                {% for error in form.remarks.errors %}{{ error }}{% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-warning text-dark">
+                            <i class="bi bi-check-circle"></i> 保存评级
+                        </button>
+                        <a href="{% url 'kiln_app:batch_detail' batch.pk %}" class="btn btn-secondary">取消</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
