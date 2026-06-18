@@ -32,5 +32,9 @@ urlpatterns = [
     path('batches/<int:batch_pk>/rating/create/', views.rating_create, name='rating_create'),
     path('batches/<int:batch_pk>/rating/edit/', views.rating_edit, name='rating_edit'),
 
+    path('batches/<int:pk>/review/', views.batch_review, name='batch_review'),
+    path('analysis/', views.batch_analysis, name='batch_analysis'),
+    path('export/csv/', views.batch_export_csv, name='batch_export_csv'),
+
     path('yield-comparison/', views.yield_comparison, name='yield_comparison'),
 ]

@@ -79,6 +79,11 @@ class Batch(models.Model):
             return latest_smoke.get_stage_display()
         return '未开始'
 
+    @property
+    def detected_stage(self):
+        from .services import detect_burning_stage
+        return detect_burning_stage(self)
+
     def clean(self):
         super().clean()
         if self.material_weight and self.material_weight <= 0:
@@ -243,3 +248,38 @@ class KilnRating(models.Model):
         for field_name, value in score_fields:
             if value is not None and (value < 0 or value > 100):
                 raise ValidationError({field_name: '评分必须在0-100范围内'})
+
+
+class ProcessWarning(models.Model):
+    WARNING_LEVEL = (
+        ('info', '提示'),
+        ('warning', '警告'),
+        ('critical', '严重'),
+    )
+    WARNING_TYPE = (
+        ('stage_mismatch', '阶段不匹配'),
+        ('temp_anomaly', '温度异常'),
+        ('damper_anomaly', '风门异常'),
+        ('combo_anomaly', '组合异常'),
+        ('smoke_anomaly', '烟色异常'),
+    )
+
+    batch = models.ForeignKey(Batch, on_delete=models.CASCADE, verbose_name='所属批次', related_name='process_warnings')
+    warning_time = models.DateTimeField('预警时间')
+    warning_type = models.CharField('预警类型', max_length=30, choices=WARNING_TYPE)
+    level = models.CharField('预警级别', max_length=20, choices=WARNING_LEVEL, default='warning')
+    detected_stage = models.CharField('识别烧制阶段', max_length=30, blank=True)
+    temperature = models.DecimalField('当时窑温(℃)', max_digits=6, decimal_places=1, null=True, blank=True)
+    damper_opening = models.IntegerField('当时风门开度(%)', null=True, blank=True)
+    smoke_stage = models.CharField('当时烟色阶段', max_length=30, blank=True)
+    message = models.TextField('预警信息')
+    is_resolved = models.BooleanField('是否已处理', default=False)
+    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+
+    class Meta:
+        verbose_name = '工艺预警'
+        verbose_name_plural = verbose_name
+        ordering = ['-warning_time']
+
+    def __str__(self):
+        return f'{self.batch.batch_no} - {self.get_warning_type_display()} [{self.get_level_display()}]'

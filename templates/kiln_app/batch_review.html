@@ -1,0 +1,293 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ batch.batch_no }} - 工艺复盘{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2>
+            <i class="bi bi-clock-history me-2 text-primary"></i>
+            工艺复盘：<code class="fs-4">{{ batch.batch_no }}</code>
+        </h2>
+        <p class="text-muted mb-0">
+            {{ batch.kiln.name }} · {{ batch.get_material_type_display }} ·
+            {{ batch.ignition_date|date:"Y-m-d H:i" }} →
+            {% if batch.finish_date %}{{ batch.finish_date|date:"Y-m-d H:i" }}{% else %}进行中{% endif %}
+        </p>
+    </div>
+    <div class="col-md-4 text-end">
+        <div class="btn-group">
+            <a href="{% url 'kiln_app:batch_detail' batch.pk %}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> 批次详情
+            </a>
+            <a href="{% url 'kiln_app:batch_analysis' %}" class="btn btn-outline-primary">
+                <i class="bi bi-bar-chart-line"></i> 对比分析
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body text-center">
+                <p class="text-muted small mb-1">识别烧制阶段</p>
+                <h4 class="mb-0 text-primary">{{ detected_stage }}</h4>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body text-center">
+                <p class="text-muted small mb-1">成炭率</p>
+                <h4 class="mb-0 {% if batch.yield_rate and batch.yield_rate >= 25 %}text-success{% elif batch.yield_rate and batch.yield_rate >= 18 %}text-warning{% else %}text-danger{% endif %}">
+                    {% if batch.yield_rate %}{{ batch.yield_rate }}%{% else %}-{% endif %}
+                </h4>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card {% if abnormal_smoke_count > 0 %}stat-danger{% endif %}">
+            <div class="card-body text-center">
+                <p class="text-muted small mb-1">异常烟色次数</p>
+                <h4 class="mb-0 {% if abnormal_smoke_count > 0 %}text-danger{% else %}text-success{% endif %}">
+                    {{ abnormal_smoke_count }}
+                </h4>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card {% if warning_count > 0 %}stat-danger{% endif %}">
+            <div class="card-body text-center">
+                <p class="text-muted small mb-1">工艺预警数</p>
+                <h4 class="mb-0 {% if warning_count > 0 %}text-warning{% else %}text-success{% endif %}">
+                    {{ warning_count }}
+                </h4>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if has_rating %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card border-warning">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0"><i class="bi bi-star me-2"></i>出窑评级</h5>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-md-2">
+                        <p class="text-muted small mb-1">等级</p>
+                        <span class="badge fs-5 bg-{% if batch.rating.grade == 'excellent' %}success
+                            {% elif batch.rating.grade == 'good' %}primary
+                            {% elif batch.rating.grade == 'medium' %}info
+                            {% elif batch.rating.grade == 'poor' %}warning text-dark
+                            {% else %}danger{% endif %}">
+                            {{ batch.rating.get_grade_display }}
+                        </span>
+                    </div>
+                    <div class="col-md-2">
+                        <p class="text-muted small mb-1">综合评分</p>
+                        <h5 class="mb-0">{{ batch.rating.total_score|default:"-" }}</h5>
+                    </div>
+                    <div class="col-md-2">
+                        <p class="text-muted small mb-1">外观</p>
+                        <h5 class="mb-0">{{ batch.rating.appearance_score|default:"-" }}</h5>
+                    </div>
+                    <div class="col-md-2">
+                        <p class="text-muted small mb-1">硬度</p>
+                        <h5 class="mb-0">{{ batch.rating.hardness_score|default:"-" }}</h5>
+                    </div>
+                    <div class="col-md-2">
+                        <p class="text-muted small mb-1">含水率</p>
+                        <h5 class="mb-0">{{ batch.rating.moisture_score|default:"-" }}</h5>
+                    </div>
+                    <div class="col-md-2">
+                        <p class="text-muted small mb-1">灰分</p>
+                        <h5 class="mb-0">{{ batch.rating.ash_content_score|default:"-" }}</h5>
+                    </div>
+                </div>
+                {% if batch.rating.remarks %}
+                    <hr><p class="small mb-0">{{ batch.rating.remarks }}</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-graph-up me-2"></i>烧制过程曲线</h5>
+            </div>
+            <div class="card-body">
+                <div style="height: 450px;">
+                    <canvas id="reviewCombinedChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-list-timeline me-2"></i>烧制过程时间轴</h5>
+            </div>
+            <div class="card-body">
+                <div style="max-height: 600px; overflow-y: auto;">
+                    {% for event in timeline_events %}
+                    <div class="d-flex align-items-start mb-3">
+                        <div class="me-3 text-center" style="min-width: 80px;">
+                            <span class="badge bg-{{ event.color }} rounded-pill">
+                                <i class="bi {{ event.icon }}"></i>
+                                +{{ event.hours }}h
+                            </span>
+                        </div>
+                        <div class="flex-grow-1">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <strong class="{% if event.type == 'warning' %}text-{{ event.color }}{% endif %}">
+                                        {{ event.value }}
+                                    </strong>
+                                    {% if event.is_abnormal %}
+                                        <span class="badge bg-danger ms-2"><i class="bi bi-exclamation-triangle"></i> 异常</span>
+                                    {% endif %}
+                                </div>
+                                <small class="text-muted">{{ event.time|date:"Y-m-d H:i" }}</small>
+                            </div>
+                            <p class="mb-0 small text-muted">{{ event.detail }}</p>
+                            {% if event.warning_msg %}
+                                <p class="mb-0 small text-danger"><i class="bi bi-exclamation-circle"></i> {{ event.warning_msg }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="text-center text-muted py-5">
+                        <i class="bi bi-inbox fs-1"></i>
+                        <p class="mt-2 mb-0">暂无过程记录</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const tempLabels = {{ temp_labels_json|safe }};
+const tempData = {{ temp_data_json|safe }};
+const damperLabels = {{ damper_labels_json|safe }};
+const damperData = {{ damper_data_json|safe }};
+const smokeLabels = {{ smoke_labels_json|safe }};
+const smokeColors = {{ smoke_colors_json|safe }};
+const smokeDisplay = {{ smoke_display_json|safe }};
+
+const allTimes = Array.from(new Set([...tempLabels, ...damperLabels, ...smokeLabels])).sort((a,b) => a-b);
+
+function getInterpolated(labels, data, time) {
+    if (labels.length === 0) return null;
+    if (time <= labels[0]) return data[0];
+    if (time >= labels[labels.length - 1]) return data[data.length - 1];
+    for (let i = 0; i < labels.length - 1; i++) {
+        if (time >= labels[i] && time <= labels[i+1]) {
+            const ratio = (time - labels[i]) / (labels[i+1] - labels[i]);
+            return data[i] + ratio * (data[i+1] - data[i]);
+        }
+    }
+    return null;
+}
+
+const tempInterpolated = allTimes.map(t => getInterpolated(tempLabels, tempData, t));
+const damperInterpolated = allTimes.map(t => getInterpolated(damperLabels, damperData, t));
+
+new Chart(document.getElementById('reviewCombinedChart'), {
+    type: 'line',
+    data: {
+        labels: allTimes,
+        datasets: [
+            {
+                label: '窑温 (℃)',
+                data: tempInterpolated,
+                borderColor: 'rgba(220, 53, 69, 1)',
+                backgroundColor: 'rgba(220, 53, 69, 0.05)',
+                yAxisID: 'yTemp',
+                tension: 0.3,
+                pointRadius: 2,
+                fill: true,
+            },
+            {
+                label: '风门开度 (%)',
+                data: damperInterpolated,
+                borderColor: 'rgba(25, 135, 84, 1)',
+                backgroundColor: 'rgba(25, 135, 84, 0.05)',
+                yAxisID: 'yDamper',
+                tension: 0.2,
+                pointRadius: 2,
+                fill: true,
+            },
+            {
+                label: '烟色阶段',
+                data: smokeLabels.map(t => {
+                    const idx = allTimes.indexOf(t);
+                    return idx >= 0 ? tempInterpolated[idx] : null;
+                }),
+                borderColor: 'transparent',
+                backgroundColor: smokeColors,
+                pointRadius: 8,
+                pointHoverRadius: 12,
+                pointStyle: 'rectRot',
+                yAxisID: 'yTemp',
+                showLine: false,
+            }
+        ]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+            legend: { position: 'top' },
+            tooltip: {
+                callbacks: {
+                    title: function(items) { return '点火后 ' + items[0].label + ' 小时'; },
+                    label: function(ctx) {
+                        if (ctx.dataset.label === '烟色阶段') {
+                            const i = smokeLabels.indexOf(parseFloat(ctx.label));
+                            if (i >= 0) return '烟色: ' + smokeDisplay[i];
+                        }
+                        return ctx.dataset.label + ': ' + (ctx.parsed.y !== null ? ctx.parsed.y.toFixed(1) : '-');
+                    }
+                }
+            }
+        },
+        scales: {
+            x: {
+                title: { display: true, text: '时间（小时）' },
+                beginAtZero: true
+            },
+            yTemp: {
+                type: 'linear',
+                position: 'left',
+                title: { display: true, text: '温度 (℃)' },
+                min: 0, max: 1000,
+                grid: { color: 'rgba(220, 53, 69, 0.1)' }
+            },
+            yDamper: {
+                type: 'linear',
+                position: 'right',
+                title: { display: true, text: '风门开度 (%)' },
+                min: 0, max: 100,
+                grid: { drawOnChartArea: false }
+            }
+        }
+    }
+});
+</script>
+{% endblock %}

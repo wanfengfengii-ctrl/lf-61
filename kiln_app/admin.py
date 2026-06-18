@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import (
     Kiln, Batch, TemperatureRecord, DamperRecord,
-    SmokeStage, KilnRating
+    SmokeStage, KilnRating, ProcessWarning
 )
 
 
@@ -127,3 +127,15 @@ class KilnRatingAdmin(admin.ModelAdmin):
     date_hierarchy = 'evaluation_date'
     list_per_page = 30
     readonly_fields = ('total_score',)
+
+
+@admin.register(ProcessWarning)
+class ProcessWarningAdmin(admin.ModelAdmin):
+    list_display = (
+        'batch', 'warning_time', 'warning_type', 'level',
+        'detected_stage', 'temperature', 'damper_opening', 'is_resolved'
+    )
+    list_filter = ('warning_type', 'level', 'is_resolved')
+    search_fields = ('batch__batch_no', 'message')
+    date_hierarchy = 'warning_time'
+    list_per_page = 30

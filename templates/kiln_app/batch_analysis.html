@@ -1,0 +1,458 @@
+{% extends 'base.html' %}
+
+{% block title %}对比分析 - 炭窑作坊管理系统{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2><i class="bi bi-bar-chart-line me-2 text-primary"></i>烧炭工艺对比分析</h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{% url 'kiln_app:dashboard' %}" class="btn btn-outline-secondary me-2">
+            <i class="bi bi-arrow-left"></i> 返回
+        </a>
+        <a href="{% url 'kiln_app:batch_export_csv' %}?kiln={{ kiln_filter }}&material_type={{ material_filter }}&date_from={{ date_from }}&date_to={{ date_to }}" class="btn btn-success">
+            <i class="bi bi-download"></i> 导出报表
+        </a>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-filter me-2"></i>筛选条件</h5>
+    </div>
+    <div class="card-body">
+        <form method="get" class="row align-items-end">
+            <div class="col-md-3 mb-2">
+                <label class="form-label">炭窑</label>
+                <select name="kiln" class="form-select">
+                    <option value="">全部炭窑</option>
+                    {% for kiln in kilns %}
+                        <option value="{{ kiln.pk }}" {% if kiln.pk|stringformat:"s" == kiln_filter %}selected{% endif %}>
+                            {{ kiln.name }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2 mb-2">
+                <label class="form-label">原料类型</label>
+                <select name="material_type" class="form-select">
+                    <option value="">全部类型</option>
+                    {% for value, label in material_types %}
+                        <option value="{{ value }}" {% if value == material_filter %}selected{% endif %}>
+                            {{ label }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2 mb-2">
+                <label class="form-label">起始日期</label>
+                <input type="date" name="date_from" class="form-control" value="{{ date_from }}">
+            </div>
+            <div class="col-md-2 mb-2">
+                <label class="form-label">截止日期</label>
+                <input type="date" name="date_to" class="form-control" value="{{ date_to }}">
+            </div>
+            <div class="col-md-3 mb-2 d-grid gap-2 d-md-flex">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-search"></i> 筛选分析
+                </button>
+                <a href="{% url 'kiln_app:batch_analysis' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-x-circle"></i> 重置
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card stat-batch">
+            <div class="card-body">
+                <p class="text-muted small mb-1">筛选批次数</p>
+                <h3 class="mb-0">{{ total_batches }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card stat-yield">
+            <div class="card-body">
+                <p class="text-muted small mb-1">平均成炭率</p>
+                <h3 class="mb-0 text-primary">{{ avg_yield }}%</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">平均烧制时长</p>
+                <h3 class="mb-0">{{ avg_duration }} h</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card {% if total_abnormal > 0 %}stat-danger{% endif %}">
+            <div class="card-body">
+                <p class="text-muted small mb-1">异常/预警总计</p>
+                <h3 class="mb-0 {% if total_abnormal > 0 %}text-danger{% else %}text-success{% endif %}">
+                    {{ total_abnormal }}
+                </h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-buildings me-2"></i>按炭窑对比</h5>
+            </div>
+            <div class="card-body">
+                <div style="height: 350px;">
+                    <canvas id="kilnChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-tree me-2"></i>按原料类型对比</h5>
+            </div>
+            <div class="card-body">
+                <div style="height: 350px;">
+                    <canvas id="materialChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-graph-up me-2"></i>成炭率 vs 烧制时长</h5>
+            </div>
+            <div class="card-body">
+                <div style="height: 350px;">
+                    <canvas id="scatterChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-exclamation-triangle me-2"></i>异常次数 vs 评级对比</h5>
+            </div>
+            <div class="card-body">
+                <div style="height: 350px;">
+                    <canvas id="abnormalGradeChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-table me-2"></i>详细对比数据</h5>
+        <a href="{% url 'kiln_app:batch_export_csv' %}?kiln={{ kiln_filter }}&material_type={{ material_filter }}&date_from={{ date_from }}&date_to={{ date_to }}" class="btn btn-sm btn-success">
+            <i class="bi bi-download"></i> 导出CSV
+        </a>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>批次编号</th>
+                        <th>炭窑</th>
+                        <th>原料类型</th>
+                        <th>成炭率</th>
+                        <th>烧制时长</th>
+                        <th>异常次数</th>
+                        <th>预警次数</th>
+                        <th>评级</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in analysis_data %}
+                    {% with batch=item.batch rate=batch.yield_rate %}
+                    <tr>
+                        <td><code class="fw-bold">{{ batch.batch_no }}</code></td>
+                        <td>{{ batch.kiln.name }}</td>
+                        <td>{{ batch.get_material_type_display }}</td>
+                        <td>
+                            <strong class="{% if rate >= 25 %}text-success{% elif rate >= 18 %}text-warning{% else %}text-danger{% endif %}">
+                                {% if rate %}{{ rate }}%{% else %}-{% endif %}
+                            </strong>
+                        </td>
+                        <td>{% if batch.duration_hours %}{{ batch.duration_hours }} h{% else %}-{% endif %}</td>
+                        <td>
+                            {% if item.abnormal_count > 0 %}
+                                <span class="badge bg-danger">{{ item.abnormal_count }}</span>
+                            {% else %}
+                                <span class="badge bg-success">0</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if item.warning_count > 0 %}
+                                <span class="badge bg-warning text-dark">{{ item.warning_count }}</span>
+                            {% else %}
+                                <span class="badge bg-success">0</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if item.has_rating %}
+                                <span class="badge bg-{% if batch.rating.grade == 'excellent' %}success
+                                    {% elif batch.rating.grade == 'good' %}primary
+                                    {% elif batch.rating.grade == 'medium' %}info
+                                    {% elif batch.rating.grade == 'poor' %}warning text-dark
+                                    {% else %}danger{% endif %}">
+                                    {{ batch.rating.get_grade_display }}
+                                </span>
+                            {% else %}
+                                <span class="text-muted small">未评</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{% url 'kiln_app:batch_review' batch.pk %}" class="btn btn-sm btn-outline-info">
+                                <i class="bi bi-clock-history"></i> 复盘
+                            </a>
+                        </td>
+                    </tr>
+                    {% endwith %}
+                    {% empty %}
+                    <tr>
+                        <td colspan="9" class="text-center text-muted py-5">
+                            <i class="bi bi-inbox fs-1"></i>
+                            <p class="mt-2 mb-0">暂无已完成批次数据</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const labels = {{ labels_json|safe }};
+const yieldData = {{ yield_data_json|safe }};
+const durationData = {{ duration_data_json|safe }};
+const abnormalData = {{ abnormal_data_json|safe }};
+const gradeData = {{ grade_data_json|safe }};
+const colors = {{ colors_json|safe }};
+const kilnLabels = {{ kiln_labels_json|safe }};
+const kilnYield = {{ kiln_yield_json|safe }};
+const kilnDuration = {{ kiln_duration_json|safe }};
+const kilnAbnormals = {{ kiln_abnormals_json|safe }};
+const materialLabels = {{ material_labels_json|safe }};
+const materialYield = {{ material_yield_json|safe }};
+const materialDuration = {{ material_duration_json|safe }};
+const materialAbnormals = {{ material_abnormals_json|safe }};
+
+const commonOpts = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { position: 'top' } }
+};
+
+new Chart(document.getElementById('kilnChart'), {
+    type: 'bar',
+    data: {
+        labels: kilnLabels,
+        datasets: [
+            {
+                label: '平均成炭率(%)',
+                data: kilnYield,
+                backgroundColor: 'rgba(54, 162, 235, 0.8)',
+                borderColor: 'rgba(54, 162, 235, 1)',
+                borderWidth: 2,
+                borderRadius: 6,
+                yAxisID: 'yYield',
+            },
+            {
+                label: '平均时长(h)',
+                data: kilnDuration,
+                backgroundColor: 'rgba(255, 206, 86, 0.8)',
+                borderColor: 'rgba(255, 206, 86, 1)',
+                borderWidth: 2,
+                borderRadius: 6,
+                yAxisID: 'yDuration',
+            },
+            {
+                label: '异常总计',
+                data: kilnAbnormals,
+                backgroundColor: 'rgba(255, 99, 132, 0.8)',
+                borderColor: 'rgba(255, 99, 132, 1)',
+                borderWidth: 2,
+                borderRadius: 6,
+                yAxisID: 'yDuration',
+            }
+        ]
+    },
+    options: {
+        ...commonOpts,
+        scales: {
+            yYield: {
+                position: 'left',
+                title: { display: true, text: '成炭率(%)' },
+                beginAtZero: true,
+                ticks: { callback: v => v + '%' },
+            },
+            yDuration: {
+                position: 'right',
+                title: { display: true, text: '时长(h) / 异常次数' },
+                beginAtZero: true,
+                grid: { drawOnChartArea: false },
+            }
+        }
+    }
+});
+
+new Chart(document.getElementById('materialChart'), {
+    type: 'bar',
+    data: {
+        labels: materialLabels,
+        datasets: [
+            {
+                label: '平均成炭率(%)',
+                data: materialYield,
+                backgroundColor: 'rgba(75, 192, 192, 0.8)',
+                borderColor: 'rgba(75, 192, 192, 1)',
+                borderWidth: 2,
+                borderRadius: 6,
+                yAxisID: 'yYield',
+            },
+            {
+                label: '平均时长(h)',
+                data: materialDuration,
+                backgroundColor: 'rgba(153, 102, 255, 0.8)',
+                borderColor: 'rgba(153, 102, 255, 1)',
+                borderWidth: 2,
+                borderRadius: 6,
+                yAxisID: 'yDuration',
+            },
+            {
+                label: '异常总计',
+                data: materialAbnormals,
+                backgroundColor: 'rgba(255, 99, 132, 0.8)',
+                borderColor: 'rgba(255, 99, 132, 1)',
+                borderWidth: 2,
+                borderRadius: 6,
+                yAxisID: 'yDuration',
+            }
+        ]
+    },
+    options: {
+        ...commonOpts,
+        scales: {
+            yYield: {
+                position: 'left',
+                title: { display: true, text: '成炭率(%)' },
+                beginAtZero: true,
+                ticks: { callback: v => v + '%' },
+            },
+            yDuration: {
+                position: 'right',
+                title: { display: true, text: '时长(h) / 异常次数' },
+                beginAtZero: true,
+                grid: { drawOnChartArea: false },
+            }
+        }
+    }
+});
+
+const scatterData = durationData.map((d, i) => ({ x: d, y: yieldData[i], label: labels[i] }));
+new Chart(document.getElementById('scatterChart'), {
+    type: 'scatter',
+    data: {
+        datasets: [{
+            label: '批次数据点',
+            data: scatterData,
+            backgroundColor: colors,
+            borderColor: colors.map(c => c.replace('0.8', '1')),
+            borderWidth: 2,
+            pointRadius: 10,
+            pointHoverRadius: 14,
+        }]
+    },
+    options: {
+        ...commonOpts,
+        plugins: {
+            ...commonOpts.plugins,
+            tooltip: {
+                callbacks: {
+                    label: function(ctx) {
+                        return [
+                            '批次: ' + ctx.raw.label,
+                            '时长: ' + ctx.raw.x + ' h',
+                            '成炭率: ' + ctx.raw.y + '%'
+                        ];
+                    }
+                }
+            }
+        },
+        scales: {
+            x: { title: { display: true, text: '烧制时长 (小时)' }, beginAtZero: true },
+            y: { title: { display: true, text: '成炭率 (%)' }, beginAtZero: true, ticks: { callback: v => v + '%' } }
+        }
+    }
+});
+
+const agData = abnormalData.map((a, i) => ({ x: a, y: gradeData[i], label: labels[i] }));
+new Chart(document.getElementById('abnormalGradeChart'), {
+    type: 'scatter',
+    data: {
+        datasets: [{
+            label: '批次数据点',
+            data: agData,
+            backgroundColor: colors,
+            borderColor: colors.map(c => c.replace('0.8', '1')),
+            borderWidth: 2,
+            pointRadius: 10,
+            pointHoverRadius: 14,
+        }]
+    },
+    options: {
+        ...commonOpts,
+        plugins: {
+            ...commonOpts.plugins,
+            tooltip: {
+                callbacks: {
+                    label: function(ctx) {
+                        const gradeNames = {5:'特级', 4:'一级', 3:'二级', 2:'三级', 1:'等外品', 0:'未评'};
+                        return [
+                            '批次: ' + ctx.raw.label,
+                            '异常次数: ' + ctx.raw.x,
+                            '评级: ' + (gradeNames[ctx.raw.y] || ctx.raw.y)
+                        ];
+                    }
+                }
+            }
+        },
+        scales: {
+            x: { title: { display: true, text: '异常/预警次数' }, beginAtZero: true },
+            y: {
+                title: { display: true, text: '评级等级' },
+                min: 0, max: 5,
+                ticks: {
+                    stepSize: 1,
+                    callback: function(v) {
+                        const m = {5:'特级', 4:'一级', 3:'二级', 2:'三级', 1:'等外品', 0:'未评'};
+                        return m[v] || '';
+                    }
+                }
+            }
+        }
+    }
+});
+</script>
+{% endblock %}
