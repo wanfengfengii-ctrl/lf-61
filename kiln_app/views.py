@@ -569,9 +569,9 @@ def batch_analysis(request):
     if material_filter:
         batches = batches.filter(material_type=material_filter)
     if date_from:
-        batches = batches.filter(ignition_date__gte=date_from)
+        batches = batches.filter(ignition_date__date__gte=date_from)
     if date_to:
-        batches = batches.filter(ignition_date__lte=date_to)
+        batches = batches.filter(ignition_date__date__lte=date_to)
 
     kilns = Kiln.objects.all()
 
@@ -694,9 +694,9 @@ def batch_export_csv(request):
     if material_filter:
         batches = batches.filter(material_type=material_filter)
     if date_from:
-        batches = batches.filter(ignition_date__gte=date_from)
+        batches = batches.filter(ignition_date__date__gte=date_from)
     if date_to:
-        batches = batches.filter(ignition_date__lte=date_to)
+        batches = batches.filter(ignition_date__date__lte=date_to)
 
     response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
     response['Content-Disposition'] = 'attachment; filename="batch_analysis_report.csv"'
