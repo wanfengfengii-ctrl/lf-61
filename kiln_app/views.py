@@ -66,7 +66,7 @@ def kiln_create(request):
         if form.is_valid():
             form.save()
             messages.success(request, '炭窑档案创建成功！')
-            return redirect('kiln_list')
+            return redirect('kiln_app:kiln_list')
     else:
         form = KilnForm()
     return render(request, 'kiln_app/kiln_form.html', {'form': form, 'action': '创建'})
@@ -79,7 +79,7 @@ def kiln_edit(request, pk):
         if form.is_valid():
             form.save()
             messages.success(request, '炭窑档案更新成功！')
-            return redirect('kiln_list')
+            return redirect('kiln_app:kiln_list')
     else:
         form = KilnForm(instance=kiln)
     return render(request, 'kiln_app/kiln_form.html', {'form': form, 'action': '编辑', 'kiln': kiln})
@@ -92,7 +92,7 @@ def kiln_delete(request, pk):
         messages.success(request, '炭窑档案已删除！')
     except Exception:
         messages.error(request, '该炭窑有关联的批次记录，无法删除！')
-    return redirect('kiln_list')
+    return redirect('kiln_app:kiln_list')
 
 
 def batch_list(request):
@@ -119,7 +119,7 @@ def batch_create(request):
         if form.is_valid():
             form.save()
             messages.success(request, '烧炭批次创建成功！')
-            return redirect('batch_list')
+            return redirect('kiln_app:batch_list')
     else:
         form = BatchForm()
     return render(request, 'kiln_app/batch_form.html', {'form': form, 'action': '创建'})
@@ -132,7 +132,7 @@ def batch_edit(request, pk):
         if form.is_valid():
             form.save()
             messages.success(request, '烧炭批次更新成功！')
-            return redirect('batch_detail', pk=batch.pk)
+            return redirect('kiln_app:batch_detail', pk=batch.pk)
     else:
         form = BatchForm(instance=batch)
     return render(request, 'kiln_app/batch_form.html', {'form': form, 'action': '编辑', 'batch': batch})
@@ -142,7 +142,7 @@ def batch_delete(request, pk):
     batch = get_object_or_404(Batch, pk=pk)
     batch.delete()
     messages.success(request, '烧炭批次已删除！')
-    return redirect('batch_list')
+    return redirect('kiln_app:batch_list')
 
 
 def batch_detail(request, pk):
@@ -222,7 +222,7 @@ def temperature_create(request, batch_pk):
             rec.batch = batch
             rec.save()
             messages.success(request, '温度记录添加成功！')
-            return redirect('batch_detail', pk=batch.pk)
+            return redirect('kiln_app:batch_detail', pk=batch.pk)
     else:
         form = TemperatureRecordForm(batch=batch)
     return render(request, 'kiln_app/record_form.html', {
@@ -238,7 +238,7 @@ def temperature_edit(request, pk):
         if form.is_valid():
             form.save()
             messages.success(request, '温度记录更新成功！')
-            return redirect('batch_detail', pk=batch.pk)
+            return redirect('kiln_app:batch_detail', pk=batch.pk)
     else:
         form = TemperatureRecordForm(instance=rec, batch=batch)
     return render(request, 'kiln_app/record_form.html', {
@@ -251,7 +251,7 @@ def temperature_delete(request, pk):
     batch_pk = rec.batch.pk
     rec.delete()
     messages.success(request, '温度记录已删除！')
-    return redirect('batch_detail', pk=batch_pk)
+    return redirect('kiln_app:batch_detail', pk=batch_pk)
 
 
 def damper_create(request, batch_pk):
@@ -263,7 +263,7 @@ def damper_create(request, batch_pk):
             rec.batch = batch
             rec.save()
             messages.success(request, '风门调整记录添加成功！')
-            return redirect('batch_detail', pk=batch.pk)
+            return redirect('kiln_app:batch_detail', pk=batch.pk)
     else:
         form = DamperRecordForm(batch=batch)
     return render(request, 'kiln_app/record_form.html', {
@@ -279,7 +279,7 @@ def damper_edit(request, pk):
         if form.is_valid():
             form.save()
             messages.success(request, '风门调整记录更新成功！')
-            return redirect('batch_detail', pk=batch.pk)
+            return redirect('kiln_app:batch_detail', pk=batch.pk)
     else:
         form = DamperRecordForm(instance=rec, batch=batch)
     return render(request, 'kiln_app/record_form.html', {
@@ -292,7 +292,7 @@ def damper_delete(request, pk):
     batch_pk = rec.batch.pk
     rec.delete()
     messages.success(request, '风门调整记录已删除！')
-    return redirect('batch_detail', pk=batch_pk)
+    return redirect('kiln_app:batch_detail', pk=batch_pk)
 
 
 def smoke_create(request, batch_pk):
@@ -307,7 +307,7 @@ def smoke_create(request, batch_pk):
                 messages.warning(request, f'烟色阶段异常：{rec.warning_message}')
             else:
                 messages.success(request, '烟色阶段记录添加成功！')
-            return redirect('batch_detail', pk=batch.pk)
+            return redirect('kiln_app:batch_detail', pk=batch.pk)
     else:
         form = SmokeStageForm(batch=batch)
     return render(request, 'kiln_app/record_form.html', {
@@ -326,7 +326,7 @@ def smoke_edit(request, pk):
                 messages.warning(request, f'烟色阶段异常：{rec.warning_message}')
             else:
                 messages.success(request, '烟色阶段记录更新成功！')
-            return redirect('batch_detail', pk=batch.pk)
+            return redirect('kiln_app:batch_detail', pk=batch.pk)
     else:
         form = SmokeStageForm(instance=rec, batch=batch)
     return render(request, 'kiln_app/record_form.html', {
@@ -339,11 +339,14 @@ def smoke_delete(request, pk):
     batch_pk = rec.batch.pk
     rec.delete()
     messages.success(request, '烟色阶段记录已删除！')
-    return redirect('batch_detail', pk=batch_pk)
+    return redirect('kiln_app:batch_detail', pk=batch_pk)
 
 
 def rating_create(request, batch_pk):
     batch = get_object_or_404(Batch, pk=batch_pk)
+    if hasattr(batch, 'rating'):
+        messages.warning(request, '该批次已存在评级，已跳转到编辑页面')
+        return redirect('kiln_app:rating_edit', batch_pk=batch.pk)
     if request.method == 'POST':
         form = KilnRatingForm(request.POST)
         if form.is_valid():
@@ -351,7 +354,7 @@ def rating_create(request, batch_pk):
             rating.batch = batch
             rating.save()
             messages.success(request, '出窑评级完成！')
-            return redirect('batch_detail', pk=batch.pk)
+            return redirect('kiln_app:batch_detail', pk=batch.pk)
     else:
         form = KilnRatingForm()
     return render(request, 'kiln_app/rating_form.html', {
@@ -367,7 +370,7 @@ def rating_edit(request, batch_pk):
         if form.is_valid():
             form.save()
             messages.success(request, '出窑评级更新成功！')
-            return redirect('batch_detail', pk=batch.pk)
+            return redirect('kiln_app:batch_detail', pk=batch.pk)
     else:
         form = KilnRatingForm(instance=rating)
     return render(request, 'kiln_app/rating_form.html', {

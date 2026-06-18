@@ -60,9 +60,11 @@ class BatchForm(forms.ModelForm):
                 field.widget.attrs['class'] = 'form-select'
         if self.instance and self.instance.pk:
             if self.instance.ignition_date:
-                self.initial['ignition_date'] = self.instance.ignition_date.strftime('%Y-%m-%dT%H:%M')
+                local_ignition = timezone.localtime(self.instance.ignition_date)
+                self.initial['ignition_date'] = local_ignition.strftime('%Y-%m-%dT%H:%M:%S')
             if self.instance.finish_date:
-                self.initial['finish_date'] = self.instance.finish_date.strftime('%Y-%m-%dT%H:%M')
+                local_finish = timezone.localtime(self.instance.finish_date)
+                self.initial['finish_date'] = local_finish.strftime('%Y-%m-%dT%H:%M:%S')
 
     def clean_batch_no(self):
         batch_no = self.cleaned_data.get('batch_no')
@@ -133,7 +135,8 @@ class TemperatureRecordForm(forms.ModelForm):
         self.fields['temperature'].widget.attrs['class'] = 'form-control'
         self.fields['position'].widget.attrs['class'] = 'form-control'
         if self.instance and self.instance.record_time:
-            self.initial['record_time'] = self.instance.record_time.strftime('%Y-%m-%dT%H:%M')
+            local_time = timezone.localtime(self.instance.record_time)
+            self.initial['record_time'] = local_time.strftime('%Y-%m-%dT%H:%M:%S')
 
     def clean_temperature(self):
         temp = self.cleaned_data.get('temperature')
@@ -148,7 +151,9 @@ class TemperatureRecordForm(forms.ModelForm):
         if not record_time:
             raise ValidationError('请输入记录时间')
         if self.batch and self.batch.ignition_date:
-            if record_time < self.batch.ignition_date:
+            ignition_rounded = self.batch.ignition_date.replace(microsecond=0)
+            record_rounded = record_time.replace(microsecond=0)
+            if record_rounded < ignition_rounded:
                 raise ValidationError('记录时间不能早于点火时间')
         if record_time > timezone.now():
             raise ValidationError('记录时间不能晚于当前时间')
@@ -173,7 +178,8 @@ class DamperRecordForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields['damper_opening'].widget.attrs['class'] = 'form-control'
         if self.instance and self.instance.record_time:
-            self.initial['record_time'] = self.instance.record_time.strftime('%Y-%m-%dT%H:%M')
+            local_time = timezone.localtime(self.instance.record_time)
+            self.initial['record_time'] = local_time.strftime('%Y-%m-%dT%H:%M:%S')
 
     def clean_damper_opening(self):
         opening = self.cleaned_data.get('damper_opening')
@@ -188,7 +194,9 @@ class DamperRecordForm(forms.ModelForm):
         if not record_time:
             raise ValidationError('请输入记录时间')
         if self.batch and self.batch.ignition_date:
-            if record_time < self.batch.ignition_date:
+            ignition_rounded = self.batch.ignition_date.replace(microsecond=0)
+            record_rounded = record_time.replace(microsecond=0)
+            if record_rounded < ignition_rounded:
                 raise ValidationError('记录时间不能早于点火时间')
         if record_time > timezone.now():
             raise ValidationError('记录时间不能晚于当前时间')
@@ -202,7 +210,7 @@ class SmokeStageForm(forms.ModelForm):
         widgets = {
             'record_time': forms.DateTimeInput(
                 attrs={'type': 'datetime-local', 'class': 'form-control'},
-                format='%Y-%m-%dT%H:%M'
+                format='%Y-%m-%dT%H:%M:%S'
             ),
             'stage': forms.Select(attrs={'class': 'form-select'}),
             'smoke_density': forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'max': 10}),
@@ -213,7 +221,8 @@ class SmokeStageForm(forms.ModelForm):
         self.batch = kwargs.pop('batch', None)
         super().__init__(*args, **kwargs)
         if self.instance and self.instance.record_time:
-            self.initial['record_time'] = self.instance.record_time.strftime('%Y-%m-%dT%H:%M')
+            local_time = timezone.localtime(self.instance.record_time)
+            self.initial['record_time'] = local_time.strftime('%Y-%m-%dT%H:%M:%S')
 
     def clean_smoke_density(self):
         density = self.cleaned_data.get('smoke_density')
@@ -227,7 +236,9 @@ class SmokeStageForm(forms.ModelForm):
         if not record_time:
             raise ValidationError('请输入记录时间')
         if self.batch and self.batch.ignition_date:
-            if record_time < self.batch.ignition_date:
+            ignition_rounded = self.batch.ignition_date.replace(microsecond=0)
+            record_rounded = record_time.replace(microsecond=0)
+            if record_rounded < ignition_rounded:
                 raise ValidationError('记录时间不能早于点火时间')
         if record_time > timezone.now():
             raise ValidationError('记录时间不能晚于当前时间')
