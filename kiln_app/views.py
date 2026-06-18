@@ -939,6 +939,20 @@ def material_batch_list(request):
     generate_stock_warnings()
 
     suppliers = Supplier.objects.all()
+
+    all_materials = RawMaterialBatch.objects.all()
+    total_batches = all_materials.count()
+    in_stock_materials = all_materials.filter(storage_status__in=['in_stock', 'partial_used'])
+    in_stock_count = in_stock_materials.count()
+    total_stock_weight = in_stock_materials.aggregate(
+        total=Sum('total_weight')
+    )['total'] or 0
+    total_used_weight = MaterialIssue.objects.filter(status='completed').aggregate(
+        total=Sum('weight')
+    )['total'] or 0
+    remaining_stock = float(total_stock_weight) - float(total_used_weight)
+    warning_count = StockWarning.objects.filter(is_resolved=False).count()
+
     context = {
         'materials': materials,
         'species_filter': species_filter,
@@ -947,6 +961,10 @@ def material_batch_list(request):
         'suppliers': suppliers,
         'wood_species_choices': RawMaterialBatch.WOOD_SPECIES,
         'storage_status_choices': RawMaterialBatch.STORAGE_STATUS,
+        'total_batches': total_batches,
+        'total_stock_weight': round(remaining_stock, 2),
+        'in_stock_count': in_stock_count,
+        'warning_count': warning_count,
     }
     return render(request, 'kiln_app/material_batch_list.html', context)
 
@@ -1033,8 +1051,8 @@ def moisture_test_create(request, material_pk):
             return redirect('kiln_app:material_batch_detail', pk=material.pk)
     else:
         form = MoistureTestForm(material_batch=material)
-    return render(request, 'kiln_app/record_form.html', {
-        'form': form, 'title': '添加含水率检测', 'material': material, 'record_type': 'moisture'
+    return render(request, 'kiln_app/moisture_test_form.html', {
+        'form': form, 'title': '添加含水率检测', 'material': material
     })
 
 
@@ -1049,8 +1067,8 @@ def moisture_test_edit(request, pk):
             return redirect('kiln_app:material_batch_detail', pk=material.pk)
     else:
         form = MoistureTestForm(instance=test, material_batch=material)
-    return render(request, 'kiln_app/record_form.html', {
-        'form': form, 'title': '编辑含水率检测', 'material': material, 'record_type': 'moisture'
+    return render(request, 'kiln_app/moisture_test_form.html', {
+        'form': form, 'title': '编辑含水率检测', 'material': material
     })
 
 

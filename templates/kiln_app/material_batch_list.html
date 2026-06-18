@@ -30,8 +30,8 @@
                 <label class="form-label">木材种类</label>
                 <select name="wood_species" class="form-select">
                     <option value="">全部树种</option>
-                    {% for value, label in wood_species %}
-                        <option value="{{ value }}" {% if wood_species_filter == value %}selected{% endif %}>{{ label }}</option>
+                    {% for value, label in wood_species_choices %}
+                        <option value="{{ value }}" {% if species_filter == value %}selected{% endif %}>{{ label }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -39,10 +39,9 @@
                 <label class="form-label">库存状态</label>
                 <select name="storage_status" class="form-select">
                     <option value="">全部状态</option>
-                    <option value="in_stock" {% if storage_status_filter == 'in_stock' %}selected{% endif %}>在库</option>
-                    <option value="partial_used" {% if storage_status_filter == 'partial_used' %}selected{% endif %}>部分领用</option>
-                    <option value="used_up" {% if storage_status_filter == 'used_up' %}selected{% endif %}>已用完</option>
-                    <option value="discarded" {% if storage_status_filter == 'discarded' %}selected{% endif %}>已报废</option>
+                    {% for value, label in storage_status_choices %}
+                        <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
                 </select>
             </div>
             <div class="col-md-3 d-flex align-items-end">
@@ -112,7 +111,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for mb in material_batches %}
+                    {% for mb in materials %}
                     <tr>
                         <td><code class="fw-bold">{{ mb.batch_no }}</code></td>
                         <td>{{ mb.supplier.name }}</td>
@@ -123,7 +122,7 @@
                             <strong class="{% if mb.remaining_weight <= 0 %}text-muted
                                 {% elif mb.remaining_weight < 100 %}text-warning
                                 {% else %}text-success{% endif %}">
-                                {{ mb.remaining_weight }} kg
+                                {{ mb.remaining_weight|floatformat:1 }} kg
                             </strong>
                         </td>
                         <td>

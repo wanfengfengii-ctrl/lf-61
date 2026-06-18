@@ -1,25 +1,25 @@
 {% extends 'base.html' %}
 
-{% block title %}{{ material_batch.batch_no }} - 原料批次详情{% endblock %}
+{% block title %}{{ material.batch_no }} - 原料批次详情{% endblock %}
 
 {% block content %}
 <div class="row mb-4">
     <div class="col-md-8">
         <h2>
             <i class="bi bi-folder2-open me-2"></i>
-            原料批次详情：<code class="fs-4">{{ material_batch.batch_no }}</code>
-            {% if material_batch.storage_status == 'in_stock' %}
+            原料批次详情：<code class="fs-4">{{ material.batch_no }}</code>
+            {% if material.storage_status == 'in_stock' %}
                 <span class="badge bg-success ms-2">在库</span>
-            {% elif material_batch.storage_status == 'partial_used' %}
+            {% elif material.storage_status == 'partial_used' %}
                 <span class="badge bg-info ms-2">部分领用</span>
-            {% elif material_batch.storage_status == 'used_up' %}
+            {% elif material.storage_status == 'used_up' %}
                 <span class="badge bg-secondary ms-2">已用完</span>
             {% else %}
                 <span class="badge bg-danger ms-2">已报废</span>
             {% endif %}
-            {% if material_batch.is_expired %}
+            {% if material.is_expired %}
                 <span class="badge bg-danger ms-2">已超期</span>
-            {% elif material_batch.days_until_expiry <= 7 %}
+            {% elif material.days_until_expiry <= 7 %}
                 <span class="badge bg-warning text-dark ms-2">临期</span>
             {% endif %}
         </h2>
@@ -29,10 +29,10 @@
             <a href="{% url 'kiln_app:material_batch_list' %}" class="btn btn-outline-secondary">
                 <i class="bi bi-arrow-left"></i> 返回列表
             </a>
-            <a href="{% url 'kiln_app:moisture_test_create' material_batch.pk %}" class="btn btn-outline-success">
+            <a href="{% url 'kiln_app:moisture_test_create' material.pk %}" class="btn btn-outline-success">
                 <i class="bi bi-droplet"></i> 检测含水率
             </a>
-            <a href="{% url 'kiln_app:material_batch_edit' material_batch.pk %}" class="btn btn-outline-primary">
+            <a href="{% url 'kiln_app:material_batch_edit' material.pk %}" class="btn btn-outline-primary">
                 <i class="bi bi-pencil"></i> 编辑
             </a>
         </div>
@@ -49,33 +49,33 @@
                 <div class="row">
                     <div class="col-md-4 mb-3">
                         <p class="text-muted small mb-1">供应商</p>
-                        <p class="mb-0 fw-bold">{{ material_batch.supplier.name }}</p>
+                        <p class="mb-0 fw-bold">{{ material.supplier.name }}</p>
                     </div>
                     <div class="col-md-4 mb-3">
                         <p class="text-muted small mb-1">木材种类</p>
-                        <p class="mb-0 fw-bold">{{ material_batch.get_wood_species_display }}</p>
+                        <p class="mb-0 fw-bold">{{ material.get_wood_species_display }}</p>
                     </div>
                     <div class="col-md-4 mb-3">
                         <p class="text-muted small mb-1">存放位置</p>
-                        <p class="mb-0 fw-bold">{{ material_batch.storage_location|default:"-" }}</p>
+                        <p class="mb-0 fw-bold">{{ material.storage_location|default:"-" }}</p>
                     </div>
                 </div>
                 <div class="row">
                     <div class="col-md-4 mb-3">
                         <p class="text-muted small mb-1">入库总重量</p>
-                        <p class="mb-0 fw-bold text-primary">{{ material_batch.total_weight }} kg</p>
+                        <p class="mb-0 fw-bold text-primary">{{ material.total_weight }} kg</p>
                     </div>
                     <div class="col-md-4 mb-3">
                         <p class="text-muted small mb-1">已领用重量</p>
-                        <p class="mb-0 fw-bold text-info">{{ material_batch.used_weight }} kg</p>
+                        <p class="mb-0 fw-bold text-info">{{ material.used_weight }} kg</p>
                     </div>
                     <div class="col-md-4 mb-3">
                         <p class="mb-0 fw-bold">
                             <span class="text-muted small mb-1 d-block">剩余重量</span>
-                            <span class="{% if material_batch.remaining_weight <= 0 %}text-muted
-                                {% elif material_batch.remaining_weight < 100 %}text-warning
+                            <span class="{% if material.remaining_weight <= 0 %}text-muted
+                                {% elif material.remaining_weight < 100 %}text-warning
                                 {% else %}text-success{% endif %}">
-                                {{ material_batch.remaining_weight }} kg
+                                {{ material.remaining_weight }} kg
                             </span>
                         </p>
                     </div>
@@ -84,8 +84,8 @@
                     <div class="col-md-4 mb-3">
                         <p class="text-muted small mb-1">初始含水率</p>
                         <p class="mb-0 fw-bold">
-                            {% if material_batch.moisture_content %}
-                                {{ material_batch.moisture_content }}%
+                            {% if material.moisture_content %}
+                                {{ material.moisture_content }}%
                             {% else %}
                                 <span class="text-muted">-</span>
                             {% endif %}
@@ -93,20 +93,20 @@
                     </div>
                     <div class="col-md-4 mb-3">
                         <p class="text-muted small mb-1">到货日期</p>
-                        <p class="mb-0 fw-bold">{{ material_batch.arrival_date|date:"Y-m-d" }}</p>
+                        <p class="mb-0 fw-bold">{{ material.arrival_date|date:"Y-m-d" }}</p>
                     </div>
                     <div class="col-md-4 mb-3">
                         <p class="mb-0 fw-bold">
                             <span class="text-muted small mb-1 d-block">已存放</span>
                             <span class="
-                                {% if material_batch.is_expired %}text-danger
-                                {% elif material_batch.days_until_expiry <= 7 %}text-warning
+                                {% if material.is_expired %}text-danger
+                                {% elif material.days_until_expiry <= 7 %}text-warning
                                 {% else %}text-success{% endif %}
-                            ">{{ material_batch.storage_days }} 天</span>
-                            {% if material_batch.is_expired %}
-                                <small class="text-danger">(超期 {{ material_batch.storage_days|add:material_batch.expected_shelf_life|negate }} 天)</small>
-                            {% elif material_batch.days_until_expiry <= 7 %}
-                                <small class="text-warning">(剩余 {{ material_batch.days_until_expiry }} 天)</small>
+                            ">{{ material.storage_days }} 天</span>
+                            {% if material.is_expired %}
+                                <small class="text-danger">(超期 {{ material.expired_days }} 天)</small>
+                            {% elif material.days_until_expiry <= 7 %}
+                                <small class="text-warning">(剩余 {{ material.days_until_expiry }} 天)</small>
                             {% endif %}
                         </p>
                     </div>
@@ -115,13 +115,13 @@
                     <div class="col-md-4 mb-3">
                         <p class="text-muted small mb-1">质检等级</p>
                         <p class="mb-0 fw-bold">
-                            {% if material_batch.quality_grade %}
-                                <span class="badge bg-{% if material_batch.quality_grade == 'excellent' %}success
-                                    {% elif material_batch.quality_grade == 'good' %}primary
-                                    {% elif material_batch.quality_grade == 'medium' %}info
-                                    {% elif material_batch.quality_grade == 'poor' %}warning text-dark
+                            {% if material.quality_grade %}
+                                <span class="badge bg-{% if material.quality_grade == 'excellent' %}success
+                                    {% elif material.quality_grade == 'good' %}primary
+                                    {% elif material.quality_grade == 'medium' %}info
+                                    {% elif material.quality_grade == 'poor' %}warning text-dark
                                     {% else %}danger{% endif %}">
-                                    {{ material_batch.get_quality_grade_display }}
+                                    {{ material.get_quality_grade_display }}
                                 </span>
                             {% else %}
                                 <span class="text-muted">-</span>
@@ -131,8 +131,8 @@
                     <div class="col-md-4 mb-3">
                         <p class="text-muted small mb-1">单价</p>
                         <p class="mb-0 fw-bold">
-                            {% if material_batch.unit_price %}
-                                ¥{{ material_batch.unit_price }}/kg
+                            {% if material.unit_price %}
+                                ¥{{ material.unit_price }}/kg
                             {% else %}
                                 <span class="text-muted">-</span>
                             {% endif %}
@@ -141,19 +141,19 @@
                     <div class="col-md-4 mb-3">
                         <p class="text-muted small mb-1">总成本</p>
                         <p class="mb-0 fw-bold text-primary">
-                            {% if material_batch.total_cost %}
-                                ¥{{ material_batch.total_cost }}
+                            {% if material.total_cost %}
+                                ¥{{ material.total_cost }}
                             {% else %}
                                 <span class="text-muted">-</span>
                             {% endif %}
                         </p>
                     </div>
                 </div>
-                {% if material_batch.remarks %}
+                {% if material.remarks %}
                     <div class="row">
                         <div class="col-md-12">
                             <p class="text-muted small mb-1">备注</p>
-                            <p class="mb-0">{{ material_batch.remarks }}</p>
+                            <p class="mb-0">{{ material.remarks }}</p>
                         </div>
                     </div>
                 {% endif %}
@@ -170,25 +170,25 @@
                 <div class="mb-3">
                     <div class="d-flex justify-content-between mb-1">
                         <span class="text-muted small">使用率</span>
-                        <strong>{{ material_batch.used_ratio }}%</strong>
+                        <strong>{{ material.used_ratio }}%</strong>
                     </div>
                     <div class="progress" style="height: 20px;">
                         <div class="progress-bar bg-info" role="progressbar" 
-                             style="width: {{ material_batch.used_ratio }}%;"
-                             aria-valuenow="{{ material_batch.used_ratio }}" 
+                             style="width: {{ material.used_ratio }}%;"
+                             aria-valuenow="{{ material.used_ratio }}" 
                              aria-valuemin="0" aria-valuemax="100">
-                            {{ material_batch.used_ratio }}%
+                            {{ material.used_ratio }}%
                         </div>
                     </div>
                 </div>
                 <div class="row text-center small">
                     <div class="col-md-6 mb-2">
                         <p class="text-muted mb-1">保质期</p>
-                        <p class="mb-0 fw-bold">{{ material_batch.expected_shelf_life }} 天</p>
+                        <p class="mb-0 fw-bold">{{ material.expected_shelf_life }} 天</p>
                     </div>
                     <div class="col-md-6 mb-2">
                         <p class="text-muted mb-1">使用比率</p>
-                        <p class="mb-0 fw-bold">{{ material_batch.used_ratio }}%</p>
+                        <p class="mb-0 fw-bold">{{ material.used_ratio }}%</p>
                     </div>
                 </div>
             </div>
@@ -199,13 +199,13 @@
                 <h5 class="mb-0"><i class="bi bi-plus-square me-2"></i>快捷操作</h5>
             </div>
             <div class="card-body d-grid gap-2">
-                <a href="{% url 'kiln_app:material_issue_create' %}?material_batch={{ material_batch.pk }}" class="btn btn-outline-primary">
+                <a href="{% url 'kiln_app:material_issue_create' %}?material={{ material.pk }}" class="btn btn-outline-primary">
                     <i class="bi bi-arrow-up-square"></i> 领料出库
                 </a>
-                <a href="{% url 'kiln_app:material_loss_create' %}?material_batch={{ material_batch.pk }}" class="btn btn-outline-danger">
+                <a href="{% url 'kiln_app:material_loss_create' %}?material={{ material.pk }}" class="btn btn-outline-danger">
                     <i class="bi bi-exclamation-triangle"></i> 登记损耗
                 </a>
-                <a href="{% url 'kiln_app:moisture_test_create' material_batch.pk %}" class="btn btn-outline-success">
+                <a href="{% url 'kiln_app:moisture_test_create' material.pk %}" class="btn btn-outline-success">
                     <i class="bi bi-droplet"></i> 检测含水率
                 </a>
             </div>
@@ -374,7 +374,7 @@
         <div class="card h-100">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h6 class="mb-0"><i class="bi bi-journal-text text-secondary me-2"></i>库存台账</h6>
-                <span class="badge bg-secondary">{{ ledger_entries|length }}</span>
+                <span class="badge bg-secondary">{{ ledger|length }}</span>
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
@@ -388,7 +388,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {% for entry in ledger_entries %}
+                            {% for entry in ledger %}
                             <tr>
                                 <td class="small">{{ entry.transaction_date|date:"Y-m-d H:i" }}</td>
                                 <td>

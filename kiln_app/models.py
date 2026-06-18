@@ -403,6 +403,12 @@ class RawMaterialBatch(models.Model):
         return self.expected_shelf_life - self.storage_days
 
     @property
+    def expired_days(self):
+        if self.is_expired:
+            return self.storage_days - self.expected_shelf_life
+        return 0
+
+    @property
     def used_ratio(self):
         if self.total_weight > 0:
             return round(float(self.used_weight) / float(self.total_weight) * 100, 2)
