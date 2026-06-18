@@ -1,0 +1,200 @@
+{% extends 'base.html' %}
+
+{% block title %}损耗记录 - 炭窑作坊管理系统{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2><i class="bi bi-exclamation-triangle me-2"></i>损耗记录管理</h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{% url 'kiln_app:material_loss_create' %}" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i> 登记损耗
+        </a>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">原料批次</label>
+                <select name="material_batch" class="form-select">
+                    <option value="">全部批次</option>
+                    {% for mb in material_batches %}
+                        <option value="{{ mb.pk }}" {% if material_batch_filter == mb.pk|stringformat:"s" %}selected{% endif %}>{{ mb.batch_no }} - {{ mb.get_wood_species_display }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">损耗类型</label>
+                <select name="loss_type" class="form-select">
+                    <option value="">全部类型</option>
+                    <option value="natural" {% if loss_type_filter == 'natural' %}selected{% endif %}>自然损耗</option>
+                    <option value="spoilage" {% if loss_type_filter == 'spoilage' %}selected{% endif %}>变质损坏</option>
+                    <option value="damage" {% if loss_type_filter == 'damage' %}selected{% endif %}>人为损坏</option>
+                    <option value="theft" {% if loss_type_filter == 'theft' %}selected{% endif %}>失窃</option>
+                    <option value="other" {% if loss_type_filter == 'other' %}selected{% endif %}>其他</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">处理状态</label>
+                <select name="handled" class="form-select">
+                    <option value="">全部状态</option>
+                    <option value="true" {% if handled_filter == 'true' %}selected{% endif %}>已处理</option>
+                    <option value="false" {% if handled_filter == 'false' %}selected{% endif %}>待处理</option>
+                </select>
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <button type="submit" class="btn btn-outline-primary me-2">
+                    <i class="bi bi-filter"></i> 筛选
+                </button>
+                <a href="{% url 'kiln_app:material_loss_list' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-x-circle"></i> 重置
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">损耗记录总数</p>
+                <h3 class="mb-0 text-primary">{{ total_losses }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">总损耗重量</p>
+                <h3 class="mb-0 text-danger">{{ total_weight }} kg</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">待处理</p>
+                <h3 class="mb-0 text-warning">{{ pending_count }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">已处理</p>
+                <h3 class="mb-0 text-success">{{ handled_count }}</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>损耗单号</th>
+                        <th>原料批次</th>
+                        <th>树种</th>
+                        <th>损耗类型</th>
+                        <th>损耗重量</th>
+                        <th>损耗日期</th>
+                        <th>发现人</th>
+                        <th>处理状态</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for loss in losses %}
+                    <tr>
+                        <td><code class="fw-bold">{{ loss.loss_no }}</code></td>
+                        <td>{{ loss.material_batch.batch_no }}</td>
+                        <td>{{ loss.material_batch.get_wood_species_display }}</td>
+                        <td>
+                            {% if loss.loss_type == 'natural' %}
+                                <span class="badge bg-secondary">自然损耗</span>
+                            {% elif loss.loss_type == 'spoilage' %}
+                                <span class="badge bg-warning text-dark">变质损坏</span>
+                            {% elif loss.loss_type == 'damage' %}
+                                <span class="badge bg-danger">人为损坏</span>
+                            {% elif loss.loss_type == 'theft' %}
+                                <span class="badge bg-danger">失窃</span>
+                            {% else %}
+                                <span class="badge bg-info">其他</span>
+                            {% endif %}
+                        </td>
+                        <td><strong class="text-danger">{{ loss.weight }} kg</strong></td>
+                        <td>{{ loss.loss_date|date:"Y-m-d" }}</td>
+                        <td>{{ loss.discovered_by|default:"-" }}</td>
+                        <td>
+                            {% if loss.handled %}
+                                <span class="badge bg-success">已处理</span>
+                            {% else %}
+                                <span class="badge bg-warning text-dark">待处理</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <a href="{% url 'kiln_app:material_loss_edit' loss.pk %}" class="btn btn-outline-primary">
+                                    <i class="bi bi-pencil"></i> 编辑
+                                </a>
+                                <button type="button" class="btn btn-outline-danger"
+                                        onclick="confirmDelete('{{ loss.pk }}', '{{ loss.loss_no }}')">
+                                    <i class="bi bi-trash"></i> 删除
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="9" class="text-center text-muted py-5">
+                            <i class="bi bi-inbox fs-1"></i>
+                            <p class="mt-2 mb-0">暂无损耗记录，请点击上方按钮登记</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-exclamation-triangle text-warning me-2"></i>确认删除</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>确定要删除损耗记录 <strong id="deleteName"></strong> 吗？</p>
+                <p class="text-danger small mb-0"><i class="bi bi-info-circle"></i> 删除后库存台账记录也会同步删除，库存将相应增加。</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <form id="deleteForm" method="post" style="display:inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-trash"></i> 确认删除
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function confirmDelete(pk, name) {
+    document.getElementById('deleteName').textContent = name;
+    document.getElementById('deleteForm').action = "{% url 'kiln_app:material_loss_list' %}" + pk + "/delete/";
+    new bootstrap.Modal(document.getElementById('deleteModal')).show();
+}
+</script>
+{% endblock %}

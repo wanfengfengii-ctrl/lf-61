@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models import Sum
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 
@@ -283,3 +284,304 @@ class ProcessWarning(models.Model):
 
     def __str__(self):
         return f'{self.batch.batch_no} - {self.get_warning_type_display()} [{self.get_level_display()}]'
+
+
+class Supplier(models.Model):
+    SUPPLIER_STATUS = (
+        ('active', '合作中'),
+        ('inactive', '暂停合作'),
+        ('blacklisted', '黑名单'),
+    )
+
+    name = models.CharField('供应商名称', max_length=200, unique=True)
+    contact_person = models.CharField('联系人', max_length=50, blank=True)
+    phone = models.CharField('联系电话', max_length=20, blank=True)
+    address = models.CharField('地址', max_length=300, blank=True)
+    wood_species = models.CharField('供应树种', max_length=200, blank=True)
+    supply_capacity = models.DecimalField('月供应量(kg)', max_digits=12, decimal_places=2, null=True, blank=True)
+    status = models.CharField('合作状态', max_length=20, choices=SUPPLIER_STATUS, default='active')
+    credit_rating = models.IntegerField('信用评分(1-100)', null=True, blank=True)
+    remarks = models.TextField('备注', blank=True)
+    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+    updated_at = models.DateTimeField('更新时间', auto_now=True)
+
+    class Meta:
+        verbose_name = '供应商档案'
+        verbose_name_plural = verbose_name
+        ordering = ['name']
+
+    def __str__(self):
+        return f'{self.name} ({self.get_status_display()})'
+
+    def clean(self):
+        super().clean()
+        if self.credit_rating is not None:
+            if self.credit_rating < 1 or self.credit_rating > 100:
+                raise ValidationError({'credit_rating': '信用评分必须在1-100范围内'})
+        if self.supply_capacity is not None and self.supply_capacity < 0:
+            raise ValidationError({'supply_capacity': '月供应量不能为负数'})
+
+
+class RawMaterialBatch(models.Model):
+    WOOD_SPECIES = (
+        ('oak', '橡木'),
+        ('pine', '松木'),
+        ('bamboo', '竹材'),
+        ('fruitwood', '果木'),
+        ('birch', '桦木'),
+        ('fir', '杉木'),
+        ('mixed', '杂木'),
+        ('other', '其他'),
+    )
+
+    QUALITY_GRADE = (
+        ('excellent', '特级'),
+        ('good', '一级'),
+        ('medium', '二级'),
+        ('poor', '三级'),
+        ('reject', '不合格'),
+    )
+
+    STORAGE_STATUS = (
+        ('in_stock', '在库'),
+        ('partial_used', '部分领用'),
+        ('used_up', '已用完'),
+        ('discarded', '已报废'),
+    )
+
+    batch_no = models.CharField('原料批次号', max_length=50, unique=True)
+    supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, verbose_name='供应商', related_name='material_batches')
+    wood_species = models.CharField('木材种类', max_length=20, choices=WOOD_SPECIES)
+    arrival_date = models.DateField('到货日期', default=timezone.now)
+    total_weight = models.DecimalField('入库总重量(kg)', max_digits=10, decimal_places=2)
+    moisture_content = models.DecimalField('初始含水率(%)', max_digits=5, decimal_places=2, null=True, blank=True)
+    piece_count = models.IntegerField('根数/件数', null=True, blank=True)
+    average_diameter = models.DecimalField('平均直径(cm)', max_digits=5, decimal_places=1, null=True, blank=True)
+    average_length = models.DecimalField('平均长度(cm)', max_digits=6, decimal_places=1, null=True, blank=True)
+    storage_location = models.CharField('存放位置', max_length=100, blank=True)
+    quality_grade = models.CharField('质检等级', max_length=20, choices=QUALITY_GRADE, null=True, blank=True)
+    inspection_notes = models.TextField('质检说明', blank=True)
+    inspector = models.CharField('检验员', max_length=50, blank=True)
+    inspection_date = models.DateField('检验日期', null=True, blank=True)
+    storage_status = models.CharField('库存状态', max_length=20, choices=STORAGE_STATUS, default='in_stock')
+    expected_shelf_life = models.IntegerField('保质期(天)', default=90)
+    unit_price = models.DecimalField('单价(元/kg)', max_digits=8, decimal_places=2, null=True, blank=True)
+    total_cost = models.DecimalField('总成本(元)', max_digits=12, decimal_places=2, null=True, blank=True)
+    remarks = models.TextField('备注', blank=True)
+    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+    updated_at = models.DateTimeField('更新时间', auto_now=True)
+
+    class Meta:
+        verbose_name = '原料批次'
+        verbose_name_plural = verbose_name
+        ordering = ['-arrival_date']
+
+    def __str__(self):
+        return f'{self.batch_no} - {self.get_wood_species_display()}'
+
+    @property
+    def used_weight(self):
+        return self.issues.filter(status='completed').aggregate(
+            total=Sum('weight')
+        )['total'] or 0
+
+    @property
+    def remaining_weight(self):
+        return float(self.total_weight) - float(self.used_weight)
+
+    @property
+    def storage_days(self):
+        today = timezone.now().date()
+        return (today - self.arrival_date).days
+
+    @property
+    def is_expired(self):
+        return self.storage_days > self.expected_shelf_life
+
+    @property
+    def days_until_expiry(self):
+        return self.expected_shelf_life - self.storage_days
+
+    @property
+    def used_ratio(self):
+        if self.total_weight > 0:
+            return round(float(self.used_weight) / float(self.total_weight) * 100, 2)
+        return 0
+
+    def save(self, *args, **kwargs):
+        if self.total_weight and self.unit_price:
+            self.total_cost = round(float(self.total_weight) * float(self.unit_price), 2)
+        super().save(*args, **kwargs)
+
+    def clean(self):
+        super().clean()
+        if self.total_weight <= 0:
+            raise ValidationError({'total_weight': '入库重量必须大于0'})
+        if self.moisture_content is not None:
+            if self.moisture_content < 0 or self.moisture_content > 100:
+                raise ValidationError({'moisture_content': '含水率必须在0-100%范围内'})
+        if self.piece_count is not None and self.piece_count < 0:
+            raise ValidationError({'piece_count': '根数不能为负数'})
+        if self.unit_price is not None and self.unit_price < 0:
+            raise ValidationError({'unit_price': '单价不能为负数'})
+        if self.expected_shelf_life <= 0:
+            raise ValidationError({'expected_shelf_life': '保质期必须大于0天'})
+
+
+class MoistureTest(models.Model):
+    material_batch = models.ForeignKey(RawMaterialBatch, on_delete=models.CASCADE, verbose_name='原料批次', related_name='moisture_tests')
+    test_date = models.DateTimeField('检测时间', default=timezone.now)
+    moisture_content = models.DecimalField('检测含水率(%)', max_digits=5, decimal_places=2)
+    test_method = models.CharField('检测方法', max_length=100, default='快速水分测定仪')
+    sample_location = models.CharField('取样位置', max_length=100, blank=True)
+    tester = models.CharField('检测人', max_length=50, blank=True)
+    notes = models.CharField('备注', max_length=200, blank=True)
+    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+
+    class Meta:
+        verbose_name = '含水率检测记录'
+        verbose_name_plural = verbose_name
+        ordering = ['-test_date']
+
+    def __str__(self):
+        return f'{self.material_batch.batch_no} - {self.moisture_content}% @ {self.test_date}'
+
+    def clean(self):
+        super().clean()
+        if self.moisture_content < 0 or self.moisture_content > 100:
+            raise ValidationError({'moisture_content': '含水率必须在0-100%范围内'})
+
+
+class StockLedger(models.Model):
+    TRANSACTION_TYPE = (
+        ('stock_in', '入库'),
+        ('stock_out', '领料出库'),
+        ('loss', '损耗'),
+        ('adjust', '库存调整'),
+        ('return', '退库'),
+    )
+
+    material_batch = models.ForeignKey(RawMaterialBatch, on_delete=models.CASCADE, verbose_name='原料批次', related_name='ledger_entries')
+    transaction_type = models.CharField('交易类型', max_length=20, choices=TRANSACTION_TYPE)
+    transaction_date = models.DateTimeField('交易时间', default=timezone.now)
+    quantity = models.DecimalField('数量(kg)', max_digits=10, decimal_places=2)
+    balance_after = models.DecimalField('结存数量(kg)', max_digits=10, decimal_places=2)
+    reference_no = models.CharField('关联单号', max_length=50, blank=True)
+    operator = models.CharField('操作人', max_length=50, blank=True)
+    notes = models.CharField('备注', max_length=300, blank=True)
+    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+
+    class Meta:
+        verbose_name = '库存台账'
+        verbose_name_plural = verbose_name
+        ordering = ['-transaction_date']
+
+    def __str__(self):
+        return f'{self.material_batch.batch_no} - {self.get_transaction_type_display()} {self.quantity}kg'
+
+
+class MaterialIssue(models.Model):
+    ISSUE_STATUS = (
+        ('pending', '待出库'),
+        ('completed', '已出库'),
+        ('cancelled', '已取消'),
+    )
+
+    issue_no = models.CharField('领料单号', max_length=50, unique=True)
+    material_batch = models.ForeignKey(RawMaterialBatch, on_delete=models.PROTECT, verbose_name='原料批次', related_name='issues')
+    batch = models.ForeignKey(Batch, on_delete=models.SET_NULL, verbose_name='烧炭批次', related_name='material_issues', null=True, blank=True)
+    weight = models.DecimalField('领用重量(kg)', max_digits=10, decimal_places=2)
+    issue_date = models.DateTimeField('领料日期', default=timezone.now)
+    requester = models.CharField('领料人', max_length=50, blank=True)
+    stock_keeper = models.CharField('发料人', max_length=50, blank=True)
+    status = models.CharField('状态', max_length=20, choices=ISSUE_STATUS, default='pending')
+    notes = models.TextField('备注', blank=True)
+    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+    updated_at = models.DateTimeField('更新时间', auto_now=True)
+
+    class Meta:
+        verbose_name = '领料出库'
+        verbose_name_plural = verbose_name
+        ordering = ['-issue_date']
+
+    def __str__(self):
+        return f'{self.issue_no} - {self.material_batch.batch_no} {self.weight}kg'
+
+    def clean(self):
+        super().clean()
+        if self.weight <= 0:
+            raise ValidationError({'weight': '领用重量必须大于0'})
+        if self.status == 'completed':
+            available = self.material_batch.remaining_weight
+            if float(self.weight) > available:
+                raise ValidationError({'weight': f'领用重量不能超过当前库存量({available}kg)'})
+
+
+class MaterialLoss(models.Model):
+    LOSS_TYPE = (
+        ('natural', '自然损耗'),
+        ('spoilage', '变质损坏'),
+        ('damage', '人为损坏'),
+        ('theft', '失窃'),
+        ('other', '其他'),
+    )
+
+    loss_no = models.CharField('损耗单号', max_length=50, unique=True)
+    material_batch = models.ForeignKey(RawMaterialBatch, on_delete=models.PROTECT, verbose_name='原料批次', related_name='losses')
+    loss_type = models.CharField('损耗类型', max_length=20, choices=LOSS_TYPE)
+    weight = models.DecimalField('损耗重量(kg)', max_digits=10, decimal_places=2)
+    loss_date = models.DateField('损耗日期', default=timezone.now)
+    discovered_by = models.CharField('发现人', max_length=50, blank=True)
+    description = models.TextField('损耗原因说明')
+    handled = models.BooleanField('是否已处理', default=False)
+    handler = models.CharField('处理人', max_length=50, blank=True)
+    handling_method = models.TextField('处理方式', blank=True)
+    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+
+    class Meta:
+        verbose_name = '损耗记录'
+        verbose_name_plural = verbose_name
+        ordering = ['-loss_date']
+
+    def __str__(self):
+        return f'{self.loss_no} - {self.get_loss_type_display()} {self.weight}kg'
+
+    def clean(self):
+        super().clean()
+        if self.weight <= 0:
+            raise ValidationError({'weight': '损耗重量必须大于0'})
+
+
+class StockWarning(models.Model):
+    WARNING_TYPE = (
+        ('low_stock', '低库存预警'),
+        ('expiring', '临期预警'),
+        ('expired', '超期存放预警'),
+    )
+
+    WARNING_LEVEL = (
+        ('info', '提示'),
+        ('warning', '警告'),
+        ('critical', '严重'),
+    )
+
+    material_batch = models.ForeignKey(RawMaterialBatch, on_delete=models.CASCADE, verbose_name='原料批次', related_name='warnings')
+    warning_type = models.CharField('预警类型', max_length=20, choices=WARNING_TYPE)
+    warning_level = models.CharField('预警级别', max_length=20, choices=WARNING_LEVEL, default='warning')
+    warning_date = models.DateTimeField('预警时间', default=timezone.now)
+    message = models.TextField('预警信息')
+    current_stock = models.DecimalField('当前库存(kg)', max_digits=10, decimal_places=2)
+    threshold = models.DecimalField('预警阈值', max_digits=10, decimal_places=2, null=True, blank=True)
+    is_resolved = models.BooleanField('是否已处理', default=False)
+    resolved_by = models.CharField('处理人', max_length=50, blank=True)
+    resolved_date = models.DateTimeField('处理时间', null=True, blank=True)
+    resolution_notes = models.TextField('处理说明', blank=True)
+    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+
+    class Meta:
+        verbose_name = '库存预警'
+        verbose_name_plural = verbose_name
+        ordering = ['-warning_date']
+
+    def __str__(self):
+        return f'{self.material_batch.batch_no} - {self.get_warning_type_display()}'

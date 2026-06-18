@@ -46,6 +46,44 @@
                             <i class="bi bi-bar-chart"></i> 成炭率对比
                         </a>
                     </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
+                            <i class="bi bi-box-seam"></i> 原料管理
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{% url 'kiln_app:supplier_list' %}">
+                                <i class="bi bi-truck"></i> 供应商档案
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'kiln_app:material_batch_list' %}">
+                                <i class="bi bi-box"></i> 原料批次管理
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'kiln_app:stock_ledger' %}">
+                                <i class="bi bi-journal-text"></i> 库存台账
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'kiln_app:material_issue_list' %}">
+                                <i class="bi bi-arrow-up-square"></i> 领料出库
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'kiln_app:material_loss_list' %}">
+                                <i class="bi bi-exclamation-triangle"></i> 损耗记录
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'kiln_app:stock_warning_list' %}">
+                                <i class="bi bi-bell"></i> 库存预警
+                            </a></li>
+                        </ul>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
+                            <i class="bi bi-graph-up"></i> 追溯分析
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{% url 'kiln_app:material_impact_analysis' %}">
+                                <i class="bi bi-activity"></i> 原料影响分析
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'kiln_app:material_usage_report' %}">
+                                <i class="bi bi-file-earmark-bar-graph"></i> 原料使用报表
+                            </a></li>
+                        </ul>
+                    </li>
                 </ul>
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item">

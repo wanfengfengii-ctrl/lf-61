@@ -1,0 +1,197 @@
+{% extends 'base.html' %}
+
+{% block title %}领料出库 - 炭窑作坊管理系统{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2><i class="bi bi-arrow-up-square me-2"></i>领料出库管理</h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{% url 'kiln_app:material_issue_create' %}" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i> 新增领料
+        </a>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">原料批次</label>
+                <select name="material_batch" class="form-select">
+                    <option value="">全部批次</option>
+                    {% for mb in material_batches %}
+                        <option value="{{ mb.pk }}" {% if material_batch_filter == mb.pk|stringformat:"s" %}selected{% endif %}>{{ mb.batch_no }} - {{ mb.get_wood_species_display }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">烧炭批次</label>
+                <select name="batch" class="form-select">
+                    <option value="">全部烧炭批次</option>
+                    {% for b in batches %}
+                        <option value="{{ b.pk }}" {% if batch_filter == b.pk|stringformat:"s" %}selected{% endif %}>{{ b.batch_no }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">状态</label>
+                <select name="status" class="form-select">
+                    <option value="">全部状态</option>
+                    <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>待出库</option>
+                    <option value="completed" {% if status_filter == 'completed' %}selected{% endif %}>已出库</option>
+                    <option value="cancelled" {% if status_filter == 'cancelled' %}selected{% endif %}>已取消</option>
+                </select>
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <button type="submit" class="btn btn-outline-primary me-2">
+                    <i class="bi bi-filter"></i> 筛选
+                </button>
+                <a href="{% url 'kiln_app:material_issue_list' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-x-circle"></i> 重置
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">领料单总数</p>
+                <h3 class="mb-0 text-primary">{{ total_issues }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">总领用重量</p>
+                <h3 class="mb-0 text-info">{{ total_weight }} kg</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">待出库</p>
+                <h3 class="mb-0 text-warning">{{ pending_count }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">已出库</p>
+                <h3 class="mb-0 text-success">{{ completed_count }}</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>领料单号</th>
+                        <th>原料批次</th>
+                        <th>树种</th>
+                        <th>烧炭批次</th>
+                        <th>领用重量</th>
+                        <th>领料日期</th>
+                        <th>领料人</th>
+                        <th>发料人</th>
+                        <th>状态</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for issue in issues %}
+                    <tr>
+                        <td><code class="fw-bold">{{ issue.issue_no }}</code></td>
+                        <td>{{ issue.material_batch.batch_no }}</td>
+                        <td>{{ issue.material_batch.get_wood_species_display }}</td>
+                        <td>
+                            {% if issue.batch %}
+                                <code>{{ issue.batch.batch_no }}</code>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td><strong>{{ issue.weight }} kg</strong></td>
+                        <td>{{ issue.issue_date|date:"Y-m-d H:i" }}</td>
+                        <td>{{ issue.requester|default:"-" }}</td>
+                        <td>{{ issue.stock_keeper|default:"-" }}</td>
+                        <td>
+                            {% if issue.status == 'completed' %}
+                                <span class="badge bg-success">已出库</span>
+                            {% elif issue.status == 'pending' %}
+                                <span class="badge bg-warning text-dark">待出库</span>
+                            {% else %}
+                                <span class="badge bg-secondary">已取消</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <a href="{% url 'kiln_app:material_issue_edit' issue.pk %}" class="btn btn-outline-primary">
+                                    <i class="bi bi-pencil"></i> 编辑
+                                </a>
+                                <button type="button" class="btn btn-outline-danger"
+                                        onclick="confirmDelete('{{ issue.pk }}', '{{ issue.issue_no }}')">
+                                    <i class="bi bi-trash"></i> 删除
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="10" class="text-center text-muted py-5">
+                            <i class="bi bi-inbox fs-1"></i>
+                            <p class="mt-2 mb-0">暂无领料记录，请点击上方按钮新增</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-exclamation-triangle text-warning me-2"></i>确认删除</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>确定要删除领料单 <strong id="deleteName"></strong> 吗？</p>
+                <p class="text-danger small mb-0"><i class="bi bi-info-circle"></i> 若该领料单已出库，删除后库存台账记录也会同步删除。</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <form id="deleteForm" method="post" style="display:inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-trash"></i> 确认删除
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function confirmDelete(pk, name) {
+    document.getElementById('deleteName').textContent = name;
+    document.getElementById('deleteForm').action = "{% url 'kiln_app:material_issue_list' %}" + pk + "/delete/";
+    new bootstrap.Modal(document.getElementById('deleteModal')).show();
+}
+</script>
+{% endblock %}

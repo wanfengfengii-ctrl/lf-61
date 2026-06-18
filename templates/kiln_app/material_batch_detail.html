@@ -1,0 +1,472 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ material_batch.batch_no }} - 原料批次详情{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2>
+            <i class="bi bi-folder2-open me-2"></i>
+            原料批次详情：<code class="fs-4">{{ material_batch.batch_no }}</code>
+            {% if material_batch.storage_status == 'in_stock' %}
+                <span class="badge bg-success ms-2">在库</span>
+            {% elif material_batch.storage_status == 'partial_used' %}
+                <span class="badge bg-info ms-2">部分领用</span>
+            {% elif material_batch.storage_status == 'used_up' %}
+                <span class="badge bg-secondary ms-2">已用完</span>
+            {% else %}
+                <span class="badge bg-danger ms-2">已报废</span>
+            {% endif %}
+            {% if material_batch.is_expired %}
+                <span class="badge bg-danger ms-2">已超期</span>
+            {% elif material_batch.days_until_expiry <= 7 %}
+                <span class="badge bg-warning text-dark ms-2">临期</span>
+            {% endif %}
+        </h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <div class="btn-group">
+            <a href="{% url 'kiln_app:material_batch_list' %}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> 返回列表
+            </a>
+            <a href="{% url 'kiln_app:moisture_test_create' material_batch.pk %}" class="btn btn-outline-success">
+                <i class="bi bi-droplet"></i> 检测含水率
+            </a>
+            <a href="{% url 'kiln_app:material_batch_edit' material_batch.pk %}" class="btn btn-outline-primary">
+                <i class="bi bi-pencil"></i> 编辑
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>基本信息</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">供应商</p>
+                        <p class="mb-0 fw-bold">{{ material_batch.supplier.name }}</p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">木材种类</p>
+                        <p class="mb-0 fw-bold">{{ material_batch.get_wood_species_display }}</p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">存放位置</p>
+                        <p class="mb-0 fw-bold">{{ material_batch.storage_location|default:"-" }}</p>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">入库总重量</p>
+                        <p class="mb-0 fw-bold text-primary">{{ material_batch.total_weight }} kg</p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">已领用重量</p>
+                        <p class="mb-0 fw-bold text-info">{{ material_batch.used_weight }} kg</p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <p class="mb-0 fw-bold">
+                            <span class="text-muted small mb-1 d-block">剩余重量</span>
+                            <span class="{% if material_batch.remaining_weight <= 0 %}text-muted
+                                {% elif material_batch.remaining_weight < 100 %}text-warning
+                                {% else %}text-success{% endif %}">
+                                {{ material_batch.remaining_weight }} kg
+                            </span>
+                        </p>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">初始含水率</p>
+                        <p class="mb-0 fw-bold">
+                            {% if material_batch.moisture_content %}
+                                {{ material_batch.moisture_content }}%
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">到货日期</p>
+                        <p class="mb-0 fw-bold">{{ material_batch.arrival_date|date:"Y-m-d" }}</p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <p class="mb-0 fw-bold">
+                            <span class="text-muted small mb-1 d-block">已存放</span>
+                            <span class="
+                                {% if material_batch.is_expired %}text-danger
+                                {% elif material_batch.days_until_expiry <= 7 %}text-warning
+                                {% else %}text-success{% endif %}
+                            ">{{ material_batch.storage_days }} 天</span>
+                            {% if material_batch.is_expired %}
+                                <small class="text-danger">(超期 {{ material_batch.storage_days|add:material_batch.expected_shelf_life|negate }} 天)</small>
+                            {% elif material_batch.days_until_expiry <= 7 %}
+                                <small class="text-warning">(剩余 {{ material_batch.days_until_expiry }} 天)</small>
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">质检等级</p>
+                        <p class="mb-0 fw-bold">
+                            {% if material_batch.quality_grade %}
+                                <span class="badge bg-{% if material_batch.quality_grade == 'excellent' %}success
+                                    {% elif material_batch.quality_grade == 'good' %}primary
+                                    {% elif material_batch.quality_grade == 'medium' %}info
+                                    {% elif material_batch.quality_grade == 'poor' %}warning text-dark
+                                    {% else %}danger{% endif %}">
+                                    {{ material_batch.get_quality_grade_display }}
+                                </span>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">单价</p>
+                        <p class="mb-0 fw-bold">
+                            {% if material_batch.unit_price %}
+                                ¥{{ material_batch.unit_price }}/kg
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">总成本</p>
+                        <p class="mb-0 fw-bold text-primary">
+                            {% if material_batch.total_cost %}
+                                ¥{{ material_batch.total_cost }}
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+                {% if material_batch.remarks %}
+                    <div class="row">
+                        <div class="col-md-12">
+                            <p class="text-muted small mb-1">备注</p>
+                            <p class="mb-0">{{ material_batch.remarks }}</p>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-graph-up me-2"></i>库存信息</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span class="text-muted small">使用率</span>
+                        <strong>{{ material_batch.used_ratio }}%</strong>
+                    </div>
+                    <div class="progress" style="height: 20px;">
+                        <div class="progress-bar bg-info" role="progressbar" 
+                             style="width: {{ material_batch.used_ratio }}%;"
+                             aria-valuenow="{{ material_batch.used_ratio }}" 
+                             aria-valuemin="0" aria-valuemax="100">
+                            {{ material_batch.used_ratio }}%
+                        </div>
+                    </div>
+                </div>
+                <div class="row text-center small">
+                    <div class="col-md-6 mb-2">
+                        <p class="text-muted mb-1">保质期</p>
+                        <p class="mb-0 fw-bold">{{ material_batch.expected_shelf_life }} 天</p>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <p class="text-muted mb-1">使用比率</p>
+                        <p class="mb-0 fw-bold">{{ material_batch.used_ratio }}%</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-plus-square me-2"></i>快捷操作</h5>
+            </div>
+            <div class="card-body d-grid gap-2">
+                <a href="{% url 'kiln_app:material_issue_create' %}?material_batch={{ material_batch.pk }}" class="btn btn-outline-primary">
+                    <i class="bi bi-arrow-up-square"></i> 领料出库
+                </a>
+                <a href="{% url 'kiln_app:material_loss_create' %}?material_batch={{ material_batch.pk }}" class="btn btn-outline-danger">
+                    <i class="bi bi-exclamation-triangle"></i> 登记损耗
+                </a>
+                <a href="{% url 'kiln_app:moisture_test_create' material_batch.pk %}" class="btn btn-outline-success">
+                    <i class="bi bi-droplet"></i> 检测含水率
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-graph-up me-2"></i>含水率变化趋势</h5>
+            </div>
+            <div class="card-body">
+                <div style="height: 300px;">
+                    <canvas id="moistureChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><i class="bi bi-droplet text-info me-2"></i>含水率检测记录</h6>
+                <span class="badge bg-info">{{ moisture_tests|length }}</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th>检测时间</th>
+                                <th>含水率</th>
+                                <th>检测方法</th>
+                                <th>检测人</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for test in moisture_tests %}
+                            <tr>
+                                <td class="small">{{ test.test_date|date:"Y-m-d H:i" }}</td>
+                                <td><strong class="{% if test.moisture_content > 25 %}text-danger
+                                    {% elif test.moisture_content > 15 %}text-warning
+                                    {% else %}text-success{% endif %}">
+                                    {{ test.moisture_content }}%
+                                </strong></td>
+                                <td class="small">{{ test.test_method|default:"-" }}</td>
+                                <td class="small">{{ test.tester|default:"-" }}</td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="{% url 'kiln_app:moisture_test_edit' test.pk %}" class="btn btn-link text-primary p-0">
+                                            <i class="bi bi-pencil"></i>
+                                        </a>
+                                        <a href="{% url 'kiln_app:moisture_test_delete' test.pk %}" class="btn btn-link text-danger p-0 ms-1"
+                                           onclick="return confirm('确定删除该含水率检测记录？')">
+                                            <i class="bi bi-trash"></i>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="5" class="text-center text-muted py-3 small">暂无检测记录</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><i class="bi bi-arrow-up-square text-primary me-2"></i>领料记录</h6>
+                <span class="badge bg-primary">{{ issues|length }}</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th>领料单号</th>
+                                <th>领用重量</th>
+                                <th>领料日期</th>
+                                <th>领料人</th>
+                                <th>状态</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for issue in issues %}
+                            <tr>
+                                <td class="small"><code>{{ issue.issue_no }}</code></td>
+                                <td><strong>{{ issue.weight }} kg</strong></td>
+                                <td class="small">{{ issue.issue_date|date:"Y-m-d" }}</td>
+                                <td class="small">{{ issue.requester|default:"-" }}</td>
+                                <td>
+                                    {% if issue.status == 'completed' %}
+                                        <span class="badge bg-success">已出库</span>
+                                    {% elif issue.status == 'pending' %}
+                                        <span class="badge bg-warning text-dark">待出库</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">已取消</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="5" class="text-center text-muted py-3 small">暂无领料记录</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><i class="bi bi-exclamation-triangle text-danger me-2"></i>损耗记录</h6>
+                <span class="badge bg-danger">{{ losses|length }}</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th>损耗单号</th>
+                                <th>类型</th>
+                                <th>重量</th>
+                                <th>日期</th>
+                                <th>处理状态</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for loss in losses %}
+                            <tr>
+                                <td class="small"><code>{{ loss.loss_no }}</code></td>
+                                <td class="small">{{ loss.get_loss_type_display }}</td>
+                                <td><strong class="text-danger">{{ loss.weight }} kg</strong></td>
+                                <td class="small">{{ loss.loss_date|date:"Y-m-d" }}</td>
+                                <td>
+                                    {% if loss.handled %}
+                                        <span class="badge bg-success">已处理</span>
+                                    {% else %}
+                                        <span class="badge bg-warning text-dark">待处理</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="5" class="text-center text-muted py-3 small">暂无损耗记录</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><i class="bi bi-journal-text text-secondary me-2"></i>库存台账</h6>
+                <span class="badge bg-secondary">{{ ledger_entries|length }}</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th>时间</th>
+                                <th>类型</th>
+                                <th>数量</th>
+                                <th>结存</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for entry in ledger_entries %}
+                            <tr>
+                                <td class="small">{{ entry.transaction_date|date:"Y-m-d H:i" }}</td>
+                                <td>
+                                    {% if entry.transaction_type == 'stock_in' %}
+                                        <span class="badge bg-success">入库</span>
+                                    {% elif entry.transaction_type == 'stock_out' %}
+                                        <span class="badge bg-primary">出库</span>
+                                    {% elif entry.transaction_type == 'loss' %}
+                                        <span class="badge bg-danger">损耗</span>
+                                    {% elif entry.transaction_type == 'adjust' %}
+                                        <span class="badge bg-info">调整</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">退库</span>
+                                    {% endif %}
+                                </td>
+                                <td class="small">
+                                    {% if entry.transaction_type == 'stock_in' or entry.transaction_type == 'return' %}
+                                        <span class="text-success">+{{ entry.quantity }} kg</span>
+                                    {% else %}
+                                        <span class="text-danger">-{{ entry.quantity }} kg</span>
+                                    {% endif %}
+                                </td>
+                                <td><strong>{{ entry.balance_after }} kg</strong></td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="4" class="text-center text-muted py-3 small">暂无台账记录</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const moistureLabels = {{ moisture_labels_json|safe }};
+const moistureData = {{ moisture_data_json|safe }};
+
+new Chart(document.getElementById('moistureChart'), {
+    type: 'line',
+    data: {
+        labels: moistureLabels,
+        datasets: [{
+            label: '含水率 (%)',
+            data: moistureData,
+            borderColor: 'rgba(13, 202, 240, 1)',
+            backgroundColor: 'rgba(13, 202, 240, 0.1)',
+            fill: true,
+            tension: 0.3,
+            pointRadius: 5,
+            pointHoverRadius: 7,
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { position: 'top' },
+            tooltip: {
+                callbacks: {
+                    title: function(items) { return '检测时间: ' + items[0].label; }
+                }
+            }
+        },
+        scales: {
+            x: {
+                title: { display: true, text: '检测日期' }
+            },
+            y: {
+                title: { display: true, text: '含水率 (%)' },
+                min: 0,
+                max: 50,
+            }
+        }
+    }
+});
+</script>
+{% endblock %}

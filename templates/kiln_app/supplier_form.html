@@ -1,0 +1,147 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ action }}供应商 - 炭窑作坊管理系统{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2>
+            <i class="bi bi-{% if action == '创建' %}plus-circle{% else %}pencil{% endif %} me-2"></i>
+            {{ action }}供应商
+        </h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{% url 'kiln_app:supplier_list' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> 返回列表
+        </a>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header bg-info text-white">
+        <h6 class="mb-0"><i class="bi bi-info-circle me-2"></i>填写说明</h6>
+    </div>
+    <div class="card-body bg-light">
+        <div class="row small">
+            <div class="col-md-4"><i class="bi bi-check2 text-success"></i> 供应商名称不可重复</div>
+            <div class="col-md-4"><i class="bi bi-check2 text-success"></i> 信用评分范围1-100</div>
+            <div class="col-md-4"><i class="bi bi-check2 text-success"></i> 月供应量不能为负数</div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="post" novalidate>
+            {% csrf_token %}
+            {% if form.non_field_errors %}
+                <div class="alert alert-danger">
+                    {% for error in form.non_field_errors %}
+                        <p class="mb-0"><i class="bi bi-exclamation-circle"></i> {{ error }}</p>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">{{ form.name.label }} <span class="text-danger">*</span></label>
+                    {{ form.name }}
+                    {% if form.name.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.name.errors %}{{ error }}{% endfor %}
+                        </div>
+                    {% endif %}
+                    <div class="form-text">供应商全称，不可重复</div>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">{{ form.status.label }}</label>
+                    {{ form.status }}
+                    {% if form.status.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.status.errors %}{{ error }}{% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">{{ form.contact_person.label }}</label>
+                    {{ form.contact_person }}
+                    {% if form.contact_person.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.contact_person.errors %}{{ error }}{% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">{{ form.phone.label }}</label>
+                    {{ form.phone }}
+                    {% if form.phone.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.phone.errors %}{{ error }}{% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">{{ form.credit_rating.label }}</label>
+                    {{ form.credit_rating }}
+                    {% if form.credit_rating.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.credit_rating.errors %}{{ error }}{% endfor %}
+                        </div>
+                    {% endif %}
+                    <div class="form-text">1-100分，分值越高信用越好</div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">{{ form.wood_species.label }}</label>
+                    {{ form.wood_species }}
+                    {% if form.wood_species.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.wood_species.errors %}{{ error }}{% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">{{ form.supply_capacity.label }}</label>
+                    {{ form.supply_capacity }}
+                    {% if form.supply_capacity.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.supply_capacity.errors %}{{ error }}{% endfor %}
+                        </div>
+                    {% endif %}
+                    <div class="form-text">单位：公斤(kg)</div>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">{{ form.address.label }}</label>
+                {{ form.address }}
+                {% if form.address.errors %}
+                    <div class="invalid-feedback d-block">
+                        {% for error in form.address.errors %}{{ error }}{% endfor %}
+                    {% endif %}
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">{{ form.remarks.label }}</label>
+                {{ form.remarks }}
+                {% if form.remarks.errors %}
+                    <div class="invalid-feedback d-block">
+                        {% for error in form.remarks.errors %}{{ error }}{% endfor %}
+                    {% endif %}
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-circle"></i> {{ action }}
+                </button>
+                <a href="{% url 'kiln_app:supplier_list' %}" class="btn btn-secondary">取消</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

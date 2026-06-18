@@ -37,4 +37,39 @@ urlpatterns = [
     path('export/csv/', views.batch_export_csv, name='batch_export_csv'),
 
     path('yield-comparison/', views.yield_comparison, name='yield_comparison'),
+
+    path('suppliers/', views.supplier_list, name='supplier_list'),
+    path('suppliers/create/', views.supplier_create, name='supplier_create'),
+    path('suppliers/<int:pk>/edit/', views.supplier_edit, name='supplier_edit'),
+    path('suppliers/<int:pk>/delete/', views.supplier_delete, name='supplier_delete'),
+
+    path('materials/', views.material_batch_list, name='material_batch_list'),
+    path('materials/create/', views.material_batch_create, name='material_batch_create'),
+    path('materials/<int:pk>/edit/', views.material_batch_edit, name='material_batch_edit'),
+    path('materials/<int:pk>/delete/', views.material_batch_delete, name='material_batch_delete'),
+    path('materials/<int:pk>/', views.material_batch_detail, name='material_batch_detail'),
+
+    path('materials/<int:material_pk>/moisture/create/', views.moisture_test_create, name='moisture_test_create'),
+    path('moisture/<int:pk>/edit/', views.moisture_test_edit, name='moisture_test_edit'),
+    path('moisture/<int:pk>/delete/', views.moisture_test_delete, name='moisture_test_delete'),
+
+    path('stock-ledger/', views.stock_ledger, name='stock_ledger'),
+
+    path('issues/', views.material_issue_list, name='material_issue_list'),
+    path('issues/create/', views.material_issue_create, name='material_issue_create'),
+    path('issues/<int:pk>/edit/', views.material_issue_edit, name='material_issue_edit'),
+    path('issues/<int:pk>/delete/', views.material_issue_delete, name='material_issue_delete'),
+
+    path('losses/', views.material_loss_list, name='material_loss_list'),
+    path('losses/create/', views.material_loss_create, name='material_loss_create'),
+    path('losses/<int:pk>/edit/', views.material_loss_edit, name='material_loss_edit'),
+    path('losses/<int:pk>/delete/', views.material_loss_delete, name='material_loss_delete'),
+
+    path('warnings/', views.stock_warning_list, name='stock_warning_list'),
+    path('warnings/<int:pk>/resolve/', views.stock_warning_resolve, name='stock_warning_resolve'),
+
+    path('batches/<int:pk>/traceability/', views.batch_traceability, name='batch_traceability'),
+    path('material-impact/', views.material_impact_analysis, name='material_impact_analysis'),
+    path('material-usage-report/', views.material_usage_report, name='material_usage_report'),
+    path('export/material-csv/', views.export_material_csv, name='export_material_csv'),
 ]

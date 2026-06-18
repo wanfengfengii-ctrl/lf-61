@@ -9,6 +9,16 @@
     </div>
 </div>
 
+{% if stock_warnings %}
+<div class="alert alert-warning alert-dismissible fade show" role="alert">
+    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+    <strong>库存预警提醒：</strong>
+    当前有 {{ stock_warnings.count }} 条预警待处理。
+    <a href="{% url 'kiln_app:stock_warning_list' %}" class="alert-link ms-2">查看详情</a>
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
 <div class="row mb-4">
     <div class="col-md-3">
         <div class="card stat-card stat-kiln">
@@ -79,9 +89,74 @@
     </div>
 </div>
 
+<div class="row mb-4">
+    <div class="col-md-2">
+        <div class="card stat-card">
+            <div class="card-body text-center">
+                <i class="bi bi-truck icon-lg text-info mb-2"></i>
+                <p class="card-text text-muted mb-1">合作供应商</p>
+                <h3 class="card-title mb-0">{{ total_suppliers }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card stat-card">
+            <div class="card-body text-center">
+                <i class="bi bi-box icon-lg text-primary mb-2"></i>
+                <p class="card-text text-muted mb-1">在库原料批</p>
+                <h3 class="card-title mb-0">{{ total_material_batches }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card stat-card">
+            <div class="card-body text-center">
+                <i class="bi bi-box-seam icon-lg text-success mb-2"></i>
+                <p class="card-text text-muted mb-1">总库存量</p>
+                <h3 class="card-title mb-0">{{ total_stock|floatformat:0 }}kg</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card stat-card">
+            <div class="card-body text-center">
+                <i class="bi bi-arrow-up-square icon-lg text-warning mb-2"></i>
+                <p class="card-text text-muted mb-1">累计领用</p>
+                <h3 class="card-title mb-0">{{ total_used|floatformat:0 }}kg</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card stat-card">
+            <div class="card-body text-center">
+                <i class="bi bi-exclamation-triangle icon-lg text-danger mb-2"></i>
+                <p class="card-text text-muted mb-1">累计损耗</p>
+                <h3 class="card-title mb-0">{{ total_loss|floatformat:0 }}kg</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card stat-card {% if low_stock_count > 0 or expired_count > 0 %}stat-danger{% endif %}">
+            <div class="card-body text-center">
+                <i class="bi bi-bell icon-lg {% if low_stock_count > 0 or expired_count > 0 %}text-danger{% else %}text-success{% endif %} mb-2"></i>
+                <p class="card-text text-muted mb-1">库存预警</p>
+                <h3 class="card-title mb-0">{{ low_stock_count|add:expiring_count|add:expired_count }}</h3>
+                <p class="mt-1 mb-0 small">
+                    {% if low_stock_count > 0 %}
+                        <span class="badge bg-warning text-dark me-1">低库存{{ low_stock_count }}</span>
+                    {% endif %}
+                    {% if expired_count > 0 %}
+                        <span class="badge bg-danger">超期{{ expired_count }}</span>
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="row">
     <div class="col-md-8">
-        <div class="card">
+        <div class="card mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>最近批次</h5>
                 <a href="{% url 'kiln_app:batch_list' %}" class="btn btn-sm btn-outline-primary">
@@ -127,6 +202,9 @@
                                     <a href="{% url 'kiln_app:batch_detail' batch.pk %}" class="btn btn-sm btn-outline-primary">
                                         <i class="bi bi-eye"></i> 详情
                                     </a>
+                                    <a href="{% url 'kiln_app:batch_traceability' batch.pk %}" class="btn btn-sm btn-outline-info">
+                                        <i class="bi bi-diagram-3"></i> 追溯
+                                    </a>
                                 </td>
                             </tr>
                             {% empty %}
@@ -134,6 +212,66 @@
                                 <td colspan="7" class="text-center text-muted py-4">
                                     <i class="bi bi-inbox fs-1"></i>
                                     <p class="mt-2 mb-0">暂无批次记录</p>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-box me-2"></i>最近原料入库</h5>
+                <a href="{% url 'kiln_app:material_batch_list' %}" class="btn btn-sm btn-outline-primary">
+                    查看全部 <i class="bi bi-arrow-right"></i>
+                </a>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>原料批次号</th>
+                                <th>供应商</th>
+                                <th>木材种类</th>
+                                <th>入库重量</th>
+                                <th>剩余库存</th>
+                                <th>入库日期</th>
+                                <th>状态</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for material in recent_materials %}
+                            <tr>
+                                <td><code>{{ material.batch_no }}</code></td>
+                                <td>{{ material.supplier.name }}</td>
+                                <td>{{ material.get_wood_species_display }}</td>
+                                <td>{{ material.total_weight }}kg</td>
+                                <td>
+                                    <strong class="{% if material.remaining_weight < 100 %}text-danger{% elif material.remaining_weight < 500 %}text-warning{% else %}text-success{% endif %}">
+                                        {{ material.remaining_weight|floatformat:1 }}kg
+                                    </strong>
+                                </td>
+                                <td>{{ material.arrival_date|date:"Y-m-d" }}</td>
+                                <td>
+                                    {% if material.is_expired %}
+                                        <span class="badge bg-danger">已超期</span>
+                                    {% elif material.days_until_expiry <= 7 %}
+                                        <span class="badge bg-warning text-dark">临期{{ material.days_until_expiry }}天</span>
+                                    {% else %}
+                                        <span class="badge bg-{{ material.storage_status }}">
+                                            {{ material.get_storage_status_display }}
+                                        </span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="7" class="text-center text-muted py-4">
+                                    <i class="bi bi-inbox fs-1"></i>
+                                    <p class="mt-2 mb-0">暂无原料记录</p>
                                 </td>
                             </tr>
                             {% endfor %}
@@ -151,15 +289,83 @@
             </div>
             <div class="card-body">
                 <div class="d-grid gap-2">
-                    <a href="{% url 'kiln_app:kiln_create' %}" class="btn btn-primary">
-                        <i class="bi bi-plus-circle"></i> 新建炭窑档案
+                    <a href="{% url 'kiln_app:supplier_create' %}" class="btn btn-outline-info">
+                        <i class="bi bi-plus-circle"></i> 新增供应商
                     </a>
-                    <a href="{% url 'kiln_app:batch_create' %}" class="btn btn-success">
-                        <i class="bi bi-play-circle"></i> 创建烧炭批次
+                    <a href="{% url 'kiln_app:material_batch_create' %}" class="btn btn-outline-success">
+                        <i class="bi bi-box-arrow-in-down"></i> 原料入库登记
                     </a>
-                    <a href="{% url 'kiln_app:yield_comparison' %}" class="btn btn-warning text-dark">
-                        <i class="bi bi-bar-chart-line"></i> 成炭率分析对比
+                    <a href="{% url 'kiln_app:material_issue_create' %}" class="btn btn-outline-warning text-dark">
+                        <i class="bi bi-box-arrow-up"></i> 领料出库
                     </a>
+                    <a href="{% url 'kiln_app:material_loss_create' %}" class="btn btn-outline-danger">
+                        <i class="bi bi-exclamation-triangle"></i> 登记损耗
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        {% if stock_warnings %}
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-bell me-2"></i>待处理预警</h5>
+                <span class="badge bg-danger">{{ stock_warnings.count }}</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                    {% for warning in stock_warnings|slice:":5" %}
+                    <div class="list-group-item list-group-item-action">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h6 class="mb-1">
+                                <i class="bi {% if warning.warning_type == 'low_stock' %}bi-box{% elif warning.warning_type == 'expired' %}bi-calendar-x{% else %}bi-calendar-warning{% endif %}"></i>
+                                {{ warning.material_batch.batch_no }}
+                            </h6>
+                            <span class="badge {% if warning.warning_level == 'critical' %}bg-danger{% elif warning.warning_level == 'warning' %}bg-warning text-dark{% else %}bg-info{% endif %}">
+                                {{ warning.get_warning_type_display }}
+                            </span>
+                        </div>
+                        <p class="mb-1 small text-muted">{{ warning.message|truncatechars:50 }}</p>
+                        <small class="text-muted">{{ warning.warning_date|date:"Y-m-d H:i" }}</small>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="card-footer text-center">
+                    <a href="{% url 'kiln_app:stock_warning_list' %}" class="btn btn-sm btn-outline-primary">查看全部预警</a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-arrow-up-square me-2"></i>最近领料</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                    {% for issue in recent_issues %}
+                    <div class="list-group-item">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h6 class="mb-1"><code>{{ issue.issue_no }}</code></h6>
+                            <span class="badge {% if issue.status == 'completed' %}bg-success{% elif issue.status == 'pending' %}bg-warning text-dark{% else %}bg-secondary{% endif %}">
+                                {{ issue.get_status_display }}
+                            </span>
+                        </div>
+                        <p class="mb-1">
+                            <i class="bi bi-box"></i> {{ issue.material_batch.batch_no }}
+                            <strong class="ms-2">{{ issue.weight }}kg</strong>
+                        </p>
+                        {% if issue.batch %}
+                        <p class="mb-1 small">
+                            <i class="bi bi-fire"></i> 用于: {{ issue.batch.batch_no }}
+                        </p>
+                        {% endif %}
+                        <small class="text-muted">{{ issue.issue_date|date:"Y-m-d H:i" }} | 领料人: {{ issue.requester }}</small>
+                    </div>
+                    {% empty %}
+                    <div class="list-group-item text-center text-muted py-3">
+                        <i class="bi bi-inbox"></i> 暂无领料记录
+                    </div>
+                    {% endfor %}
                 </div>
             </div>
         </div>
@@ -170,10 +376,11 @@
             </div>
             <div class="card-body">
                 <ul class="list-unstyled mb-0 small">
-                    <li class="mb-2"><i class="bi bi-check2-circle text-success"></i> 窑温正常范围：0-1200℃</li>
-                    <li class="mb-2"><i class="bi bi-check2-circle text-success"></i> 风门开度范围：0-100%</li>
-                    <li class="mb-2"><i class="bi bi-check2-circle text-success"></i> 烟色异常自动提示过火/欠火</li>
-                    <li><i class="bi bi-check2-circle text-success"></i> 批次编号系统自动校验唯一性</li>
+                    <li class="mb-2"><i class="bi bi-check2-circle text-success"></i> 低库存阈值：500kg</li>
+                    <li class="mb-2"><i class="bi bi-check2-circle text-success"></i> 临期预警：提前7天</li>
+                    <li class="mb-2"><i class="bi bi-check2-circle text-success"></i> 原料保质期：默认90天</li>
+                    <li class="mb-2"><i class="bi bi-check2-circle text-success"></i> 库存台账自动记录出入库</li>
+                    <li><i class="bi bi-check2-circle text-success"></i> 支持批次追溯与影响分析</li>
                 </ul>
             </div>
         </div>

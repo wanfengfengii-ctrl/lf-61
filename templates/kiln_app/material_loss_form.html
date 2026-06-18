@@ -1,0 +1,157 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ action }}损耗记录 - 炭窑作坊管理系统{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2>
+            <i class="bi bi-{% if action == '创建' %}plus-circle{% else %}pencil{% endif %} me-2"></i>
+            {{ action }}损耗记录
+        </h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{% url 'kiln_app:material_loss_list' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> 返回列表
+        </a>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header bg-info text-white">
+        <h6 class="mb-0"><i class="bi bi-info-circle me-2"></i>填写说明</h6>
+    </div>
+    <div class="card-body bg-light">
+        <div class="row small">
+            <div class="col-md-4"><i class="bi bi-check2 text-success"></i> 损耗单号不可重复</div>
+            <div class="col-md-4"><i class="bi bi-check2 text-success"></i> 损耗重量不能超过当前库存量</div>
+            <div class="col-md-4"><i class="bi bi-check2 text-success"></i> 登记后会自动扣减库存</div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="post" novalidate>
+            {% csrf_token %}
+            {% if form.non_field_errors %}
+                <div class="alert alert-danger">
+                    {% for error in form.non_field_errors %}
+                        <p class="mb-0"><i class="bi bi-exclamation-circle"></i> {{ error }}</p>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">{{ form.loss_no.label }} <span class="text-danger">*</span></label>
+                    {{ form.loss_no }}
+                    {% if form.loss_no.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.loss_no.errors %}{{ error }}{% endfor %}
+                        </div>
+                    {% endif %}
+                    <div class="form-text">例如：SH-2024-001，系统会校验唯一性</div>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">{{ form.loss_type.label }} <span class="text-danger">*</span></label>
+                    {{ form.loss_type }}
+                    {% if form.loss_type.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.loss_type.errors %}{{ error }}{% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">{{ form.material_batch.label }} <span class="text-danger">*</span></label>
+                    {{ form.material_batch }}
+                    {% if form.material_batch.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.material_batch.errors %}{{ error }}{% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">{{ form.loss_date.label }} <span class="text-danger">*</span></label>
+                    {{ form.loss_date }}
+                    {% if form.loss_date.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.loss_date.errors %}{{ error }}{% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">{{ form.weight.label }} <span class="text-danger">*</span></label>
+                    {{ form.weight }}
+                    {% if form.weight.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.weight.errors %}{{ error }}{% endfor %}
+                        </div>
+                    {% endif %}
+                    <div class="form-text">单位：公斤(kg)，必须大于0</div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">{{ form.discovered_by.label }}</label>
+                    {{ form.discovered_by }}
+                    {% if form.discovered_by.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.discovered_by.errors %}{{ error }}{% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="col-md-4 mb-3">
+                    <div class="form-check mt-4">
+                        {{ form.handled }}
+                        <label class="form-check-label" for="{{ form.handled.id_for_label }}">
+                            {{ form.handled.label }}
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">{{ form.handler.label }}</label>
+                    {{ form.handler }}
+                    {% if form.handler.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.handler.errors %}{{ error }}{% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">{{ form.description.label }} <span class="text-danger">*</span></label>
+                {{ form.description }}
+                {% if form.description.errors %}
+                    <div class="invalid-feedback d-block">
+                        {% for error in form.description.errors %}{{ error }}{% endfor %}
+                    {% endif %}
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">{{ form.handling_method.label }}</label>
+                {{ form.handling_method }}
+                {% if form.handling_method.errors %}
+                    <div class="invalid-feedback d-block">
+                        {% for error in form.handling_method.errors %}{{ error }}{% endfor %}
+                    {% endif %}
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-circle"></i> {{ action }}
+                </button>
+                <a href="{% url 'kiln_app:material_loss_list' %}" class="btn btn-secondary">取消</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

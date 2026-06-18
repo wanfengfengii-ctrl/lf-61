@@ -1,0 +1,454 @@
+{% extends 'base.html' %}
+
+{% block title %}原料使用报表 - 炭窑作坊管理系统{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2><i class="bi bi-file-earmark-bar-graph me-2 text-primary"></i>原料使用报表</h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{% url 'kiln_app:export_material_csv' %}?supplier={{ supplier_filter }}&wood_species={{ wood_species_filter }}&date_from={{ date_from }}&date_to={{ date_to }}" class="btn btn-success">
+            <i class="bi bi-download"></i> 导出CSV
+        </a>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-filter me-2"></i>筛选条件</h5>
+    </div>
+    <div class="card-body">
+        <form method="get" class="row align-items-end">
+            <div class="col-md-3 mb-2">
+                <label class="form-label">供应商</label>
+                <select name="supplier" class="form-select">
+                    <option value="">全部供应商</option>
+                    {% for s in suppliers %}
+                        <option value="{{ s.pk }}" {% if supplier_filter == s.pk|stringformat:"s" %}selected{% endif %}>{{ s.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3 mb-2">
+                <label class="form-label">树种</label>
+                <select name="wood_species" class="form-select">
+                    <option value="">全部树种</option>
+                    {% for value, label in wood_species %}
+                        <option value="{{ value }}" {% if wood_species_filter == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2 mb-2">
+                <label class="form-label">起始日期</label>
+                <input type="date" name="date_from" class="form-control" value="{{ date_from }}">
+            </div>
+            <div class="col-md-2 mb-2">
+                <label class="form-label">截止日期</label>
+                <input type="date" name="date_to" class="form-control" value="{{ date_to }}">
+            </div>
+            <div class="col-md-2 mb-2 d-grid gap-2 d-md-flex">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-search"></i> 筛选
+                </button>
+                <a href="{% url 'kiln_app:material_usage_report' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-x-circle"></i> 重置
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">领料单数量</p>
+                <h3 class="mb-0 text-primary">{{ total_issues }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">总用量</p>
+                <h3 class="mb-0 text-info">{{ total_usage }} kg</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">总成本</p>
+                <h3 class="mb-0 text-success">¥{{ total_cost }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">平均单价</p>
+                <h3 class="mb-0 text-warning">¥{{ avg_unit_price }}/kg</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-tree me-2"></i>按树种统计用量</h5>
+            </div>
+            <div class="card-body">
+                <div style="height: 350px;">
+                    <canvas id="speciesChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-truck me-2"></i>按供应商统计用量</h5>
+            </div>
+            <div class="card-body">
+                <div style="height: 350px;">
+                    <canvas id="supplierChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-pie-chart me-2"></i>树种用量占比</h5>
+            </div>
+            <div class="card-body">
+                <div style="height: 350px;">
+                    <canvas id="speciesPieChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-pie-chart me-2"></i>供应商用量占比</h5>
+            </div>
+            <div class="card-body">
+                <div style="height: 350px;">
+                    <canvas id="supplierPieChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-table me-2"></i>按树种统计明细</h5>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>树种</th>
+                        <th>领料次数</th>
+                        <th>总用量(kg)</th>
+                        <th>总成本(元)</th>
+                        <th>平均单价(元/kg)</th>
+                        <th>占比</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in species_summary %}
+                    <tr>
+                        <td><strong>{{ item.species_name }}</strong></td>
+                        <td>{{ item.count }}</td>
+                        <td><strong class="text-primary">{{ item.total_weight }} kg</strong></td>
+                        <td><strong class="text-success">¥{{ item.total_cost }}</strong></td>
+                        <td>¥{{ item.avg_price }}</td>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <div class="progress me-2" style="width: 100px; height: 15px;">
+                                    <div class="progress-bar bg-primary" role="progressbar" 
+                                         style="width: {{ item.percentage }}%;"
+                                         aria-valuenow="{{ item.percentage }}" aria-valuemin="0" aria-valuemax="100">
+                                    </div>
+                                </div>
+                                <span>{{ item.percentage }}%</span>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-5">
+                            <i class="bi bi-inbox fs-1"></i>
+                            <p class="mt-2 mb-0">暂无数据</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-table me-2"></i>按供应商统计明细</h5>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>供应商</th>
+                        <th>树种</th>
+                        <th>领料次数</th>
+                        <th>总用量(kg)</th>
+                        <th>总成本(元)</th>
+                        <th>平均单价(元/kg)</th>
+                        <th>占比</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in supplier_summary %}
+                    <tr>
+                        <td><strong>{{ item.supplier_name }}</strong></td>
+                        <td>{{ item.species_name }}</td>
+                        <td>{{ item.count }}</td>
+                        <td><strong class="text-primary">{{ item.total_weight }} kg</strong></td>
+                        <td><strong class="text-success">¥{{ item.total_cost }}</strong></td>
+                        <td>¥{{ item.avg_price }}</td>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <div class="progress me-2" style="width: 100px; height: 15px;">
+                                    <div class="progress-bar bg-info" role="progressbar" 
+                                         style="width: {{ item.percentage }}%;"
+                                         aria-valuenow="{{ item.percentage }}" aria-valuemin="0" aria-valuemax="100">
+                                    </div>
+                                </div>
+                                <span>{{ item.percentage }}%</span>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center text-muted py-5">
+                            <i class="bi bi-inbox fs-1"></i>
+                            <p class="mt-2 mb-0">暂无数据</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-table me-2"></i>领料明细</h5>
+        <a href="{% url 'kiln_app:export_material_csv' %}?supplier={{ supplier_filter }}&wood_species={{ wood_species_filter }}&date_from={{ date_from }}&date_to={{ date_to }}" class="btn btn-sm btn-success">
+            <i class="bi bi-download"></i> 导出CSV
+        </a>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>领料单号</th>
+                        <th>原料批次</th>
+                        <th>供应商</th>
+                        <th>树种</th>
+                        <th>领用重量(kg)</th>
+                        <th>单价(元/kg)</th>
+                        <th>成本(元)</th>
+                        <th>领料日期</th>
+                        <th>领料人</th>
+                        <th>烧炭批次</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for issue in issues %}
+                    <tr>
+                        <td><code>{{ issue.issue_no }}</code></td>
+                        <td>{{ issue.material_batch.batch_no }}</td>
+                        <td>{{ issue.material_batch.supplier.name }}</td>
+                        <td>{{ issue.material_batch.get_wood_species_display }}</td>
+                        <td><strong class="text-primary">{{ issue.weight }} kg</strong></td>
+                        <td>
+                            {% if issue.material_batch.unit_price %}
+                                ¥{{ issue.material_batch.unit_price }}
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if issue.material_batch.unit_price %}
+                                <strong class="text-success">¥{{ issue.cost|floatformat:2 }}</strong>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ issue.issue_date|date:"Y-m-d" }}</td>
+                        <td>{{ issue.requester|default:"-" }}</td>
+                        <td>
+                            {% if issue.batch %}
+                                <code>{{ issue.batch.batch_no }}</code>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="10" class="text-center text-muted py-5">
+                            <i class="bi bi-inbox fs-1"></i>
+                            <p class="mt-2 mb-0">暂无领料记录</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const speciesLabels = {{ species_labels_json|safe }};
+const speciesData = {{ species_data_json|safe }};
+const supplierLabels = {{ supplier_labels_json|safe }};
+const supplierData = {{ supplier_data_json|safe }};
+const speciesPieData = {{ species_pie_data_json|safe }};
+const supplierPieData = {{ supplier_pie_data_json|safe }};
+
+const pieColors = [
+    'rgba(54, 162, 235, 0.8)',
+    'rgba(255, 99, 132, 0.8)',
+    'rgba(255, 206, 86, 0.8)',
+    'rgba(75, 192, 192, 0.8)',
+    'rgba(153, 102, 255, 0.8)',
+    'rgba(255, 159, 64, 0.8)',
+    'rgba(199, 199, 199, 0.8)',
+];
+
+const commonOpts = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { position: 'top' } }
+};
+
+new Chart(document.getElementById('speciesChart'), {
+    type: 'bar',
+    data: {
+        labels: speciesLabels,
+        datasets: [{
+            label: '用量 (kg)',
+            data: speciesData,
+            backgroundColor: pieColors,
+            borderColor: pieColors.map(c => c.replace('0.8', '1')),
+            borderWidth: 2,
+            borderRadius: 6,
+        }]
+    },
+    options: {
+        ...commonOpts,
+        scales: {
+            y: {
+                title: { display: true, text: '重量 (kg)' },
+                beginAtZero: true
+            }
+        }
+    }
+});
+
+new Chart(document.getElementById('supplierChart'), {
+    type: 'bar',
+    data: {
+        labels: supplierLabels,
+        datasets: [{
+            label: '用量 (kg)',
+            data: supplierData,
+            backgroundColor: pieColors,
+            borderColor: pieColors.map(c => c.replace('0.8', '1')),
+            borderWidth: 2,
+            borderRadius: 6,
+        }]
+    },
+    options: {
+        ...commonOpts,
+        scales: {
+            y: {
+                title: { display: true, text: '重量 (kg)' },
+                beginAtZero: true
+            }
+        }
+    }
+});
+
+new Chart(document.getElementById('speciesPieChart'), {
+    type: 'doughnut',
+    data: {
+        labels: speciesLabels,
+        datasets: [{
+            data: speciesPieData,
+            backgroundColor: pieColors,
+            borderColor: pieColors.map(c => c.replace('0.8', '1')),
+            borderWidth: 2,
+        }]
+    },
+    options: {
+        ...commonOpts,
+        plugins: {
+            ...commonOpts.plugins,
+            tooltip: {
+                callbacks: {
+                    label: function(ctx) {
+                        const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                        const percentage = ((ctx.raw / total) * 100).toFixed(1);
+                        return ctx.label + ': ' + ctx.raw + ' kg (' + percentage + '%)';
+                    }
+                }
+            }
+        }
+    }
+});
+
+new Chart(document.getElementById('supplierPieChart'), {
+    type: 'doughnut',
+    data: {
+        labels: supplierLabels,
+        datasets: [{
+            data: supplierPieData,
+            backgroundColor: pieColors,
+            borderColor: pieColors.map(c => c.replace('0.8', '1')),
+            borderWidth: 2,
+        }]
+    },
+    options: {
+        ...commonOpts,
+        plugins: {
+            ...commonOpts.plugins,
+            tooltip: {
+                callbacks: {
+                    label: function(ctx) {
+                        const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                        const percentage = ((ctx.raw / total) * 100).toFixed(1);
+                        return ctx.label + ': ' + ctx.raw + ' kg (' + percentage + '%)';
+                    }
+                }
+            }
+        }
+    }
+});
+</script>
+{% endblock %}

@@ -1,7 +1,9 @@
 from django.contrib import admin
 from .models import (
     Kiln, Batch, TemperatureRecord, DamperRecord,
-    SmokeStage, KilnRating, ProcessWarning
+    SmokeStage, KilnRating, ProcessWarning,
+    Supplier, RawMaterialBatch, MoistureTest,
+    StockLedger, MaterialIssue, MaterialLoss, StockWarning
 )
 
 
@@ -139,3 +141,172 @@ class ProcessWarningAdmin(admin.ModelAdmin):
     search_fields = ('batch__batch_no', 'message')
     date_hierarchy = 'warning_time'
     list_per_page = 30
+
+
+class MoistureTestInline(admin.TabularInline):
+    model = MoistureTest
+    extra = 0
+    fields = ('test_date', 'moisture_content', 'test_method', 'tester')
+
+
+class MaterialIssueInline(admin.TabularInline):
+    model = MaterialIssue
+    extra = 0
+    fields = ('issue_no', 'weight', 'issue_date', 'requester', 'status')
+
+
+class MaterialLossInline(admin.TabularInline):
+    model = MaterialLoss
+    extra = 0
+    fields = ('loss_no', 'loss_type', 'weight', 'loss_date', 'handled')
+
+
+class StockLedgerInline(admin.TabularInline):
+    model = StockLedger
+    extra = 0
+    fields = ('transaction_type', 'transaction_date', 'quantity', 'balance_after', 'operator')
+    readonly_fields = ('transaction_type', 'transaction_date', 'quantity', 'balance_after', 'operator')
+
+
+@admin.register(Supplier)
+class SupplierAdmin(admin.ModelAdmin):
+    list_display = ('name', 'contact_person', 'phone', 'wood_species', 'status', 'credit_rating', 'batch_count')
+    list_filter = ('status',)
+    search_fields = ('name', 'contact_person', 'phone', 'wood_species')
+    list_per_page = 20
+
+    def batch_count(self, obj):
+        return obj.material_batches.count()
+    batch_count.short_description = '原料批次'
+
+
+@admin.register(RawMaterialBatch)
+class RawMaterialBatchAdmin(admin.ModelAdmin):
+    list_display = (
+        'batch_no', 'supplier', 'wood_species_display', 'total_weight',
+        'remaining_weight_display', 'moisture_content', 'arrival_date',
+        'storage_days', 'status_display', 'warning_display'
+    )
+    list_filter = ('wood_species', 'quality_grade', 'storage_status', 'supplier')
+    search_fields = ('batch_no', 'storage_location', 'remarks')
+    date_hierarchy = 'arrival_date'
+    list_per_page = 20
+    inlines = [MoistureTestInline, MaterialIssueInline, MaterialLossInline, StockLedgerInline]
+
+    def wood_species_display(self, obj):
+        return obj.get_wood_species_display()
+    wood_species_display.short_description = '木材种类'
+
+    def remaining_weight_display(self, obj):
+        remaining = obj.remaining_weight
+        ratio = obj.used_ratio
+        color = 'red' if remaining < 100 else 'orange' if remaining < 500 else 'green'
+        return f'<span style="color:{color};font-weight:bold;">{remaining}kg ({100-ratio}%)</span>'
+    remaining_weight_display.short_description = '剩余库存'
+    remaining_weight_display.allow_tags = True
+
+    def status_display(self, obj):
+        status_map = {
+            'in_stock': 'bg-success',
+            'partial_used': 'bg-info',
+            'used_up': 'bg-secondary',
+            'discarded': 'bg-danger',
+        }
+        return f'<span class="badge {status_map.get(obj.storage_status, "bg-secondary")}">{obj.get_storage_status_display()}</span>'
+    status_display.short_description = '库存状态'
+    status_display.allow_tags = True
+
+    def warning_display(self, obj):
+        warnings = []
+        if obj.is_expired:
+            warnings.append('<span class="badge bg-danger">已超期</span>')
+        elif obj.days_until_expiry <= 7:
+            warnings.append(f'<span class="badge bg-warning text-dark">临期{obj.days_until_expiry}天</span>')
+        if obj.remaining_weight < 100:
+            warnings.append('<span class="badge bg-warning text-dark">低库存</span>')
+        return ' '.join(warnings) if warnings else '-'
+    warning_display.short_description = '预警'
+    warning_display.allow_tags = True
+
+
+@admin.register(MaterialIssue)
+class MaterialIssueAdmin(admin.ModelAdmin):
+    list_display = (
+        'issue_no', 'material_batch', 'batch', 'weight',
+        'issue_date', 'requester', 'status'
+    )
+    list_filter = ('status',)
+    search_fields = ('issue_no', 'requester', 'material_batch__batch_no', 'batch__batch_no')
+    date_hierarchy = 'issue_date'
+    list_per_page = 30
+
+
+@admin.register(MaterialLoss)
+class MaterialLossAdmin(admin.ModelAdmin):
+    list_display = (
+        'loss_no', 'material_batch', 'loss_type_display', 'weight',
+        'loss_date', 'discovered_by', 'handled'
+    )
+    list_filter = ('loss_type', 'handled')
+    search_fields = ('loss_no', 'description', 'material_batch__batch_no')
+    date_hierarchy = 'loss_date'
+    list_per_page = 30
+
+    def loss_type_display(self, obj):
+        return obj.get_loss_type_display()
+    loss_type_display.short_description = '损耗类型'
+
+
+@admin.register(StockLedger)
+class StockLedgerAdmin(admin.ModelAdmin):
+    list_display = (
+        'material_batch', 'transaction_type_display', 'transaction_date',
+        'quantity', 'balance_after', 'operator', 'reference_no'
+    )
+    list_filter = ('transaction_type',)
+    search_fields = ('material_batch__batch_no', 'reference_no', 'operator')
+    date_hierarchy = 'transaction_date'
+    list_per_page = 50
+    readonly_fields = ('material_batch', 'transaction_type', 'transaction_date', 'quantity', 'balance_after', 'operator', 'reference_no', 'notes')
+
+    def transaction_type_display(self, obj):
+        return obj.get_transaction_type_display()
+    transaction_type_display.short_description = '交易类型'
+
+
+@admin.register(StockWarning)
+class StockWarningAdmin(admin.ModelAdmin):
+    list_display = (
+        'material_batch', 'warning_type_display', 'warning_level_display',
+        'warning_date', 'current_stock', 'is_resolved'
+    )
+    list_filter = ('warning_type', 'warning_level', 'is_resolved')
+    search_fields = ('material_batch__batch_no', 'message')
+    date_hierarchy = 'warning_date'
+    list_per_page = 30
+
+    def warning_type_display(self, obj):
+        return obj.get_warning_type_display()
+    warning_type_display.short_description = '预警类型'
+
+    def warning_level_display(self, obj):
+        level_map = {
+            'info': 'bg-info',
+            'warning': 'bg-warning text-dark',
+            'critical': 'bg-danger',
+        }
+        return f'<span class="badge {level_map.get(obj.warning_level, "bg-secondary")}">{obj.get_warning_level_display()}</span>'
+    warning_level_display.short_description = '预警级别'
+    warning_level_display.allow_tags = True
+
+
+@admin.register(MoistureTest)
+class MoistureTestAdmin(admin.ModelAdmin):
+    list_display = (
+        'material_batch', 'test_date', 'moisture_content',
+        'test_method', 'tester'
+    )
+    list_filter = ('test_method',)
+    search_fields = ('material_batch__batch_no', 'tester')
+    date_hierarchy = 'test_date'
+    list_per_page = 50

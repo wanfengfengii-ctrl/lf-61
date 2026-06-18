@@ -1,0 +1,530 @@
+{% extends 'base.html' %}
+
+{% block title %}原料影响分析 - 炭窑作坊管理系统{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2><i class="bi bi-activity me-2 text-primary"></i>原料影响分析</h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{% url 'kiln_app:dashboard' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> 返回
+        </a>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-filter me-2"></i>筛选条件</h5>
+    </div>
+    <div class="card-body">
+        <form method="get" class="row align-items-end">
+            <div class="col-md-3 mb-2">
+                <label class="form-label">供应商</label>
+                <select name="supplier" class="form-select">
+                    <option value="">全部供应商</option>
+                    {% for s in suppliers %}
+                        <option value="{{ s.pk }}" {% if supplier_filter == s.pk|stringformat:"s" %}selected{% endif %}>{{ s.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3 mb-2">
+                <label class="form-label">树种</label>
+                <select name="wood_species" class="form-select">
+                    <option value="">全部树种</option>
+                    {% for value, label in wood_species %}
+                        <option value="{{ value }}" {% if wood_species_filter == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2 mb-2">
+                <label class="form-label">起始日期</label>
+                <input type="date" name="date_from" class="form-control" value="{{ date_from }}">
+            </div>
+            <div class="col-md-2 mb-2">
+                <label class="form-label">截止日期</label>
+                <input type="date" name="date_to" class="form-control" value="{{ date_to }}">
+            </div>
+            <div class="col-md-2 mb-2 d-grid">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-search"></i> 分析
+                </button>
+                <a href="{% url 'kiln_app:material_impact_analysis' %}" class="btn btn-outline-secondary mt-1">
+                    <i class="bi bi-x-circle"></i> 重置
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">分析批次数量</p>
+                <h3 class="mb-0 text-primary">{{ total_batches }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">平均成炭率</p>
+                <h3 class="mb-0 text-success">{{ avg_yield_rate }}%</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">平均含水率</p>
+                <h3 class="mb-0 text-info">{{ avg_moisture }}%</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">平均存放天数</p>
+                <h3 class="mb-0 text-warning">{{ avg_storage_days }} 天</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-truck me-2"></i>不同供应商的成炭率对比</h5>
+            </div>
+            <div class="card-body">
+                <div style="height: 350px;">
+                    <canvas id="supplierYieldChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-tree me-2"></i>不同树种的成炭率对比</h5>
+            </div>
+            <div class="card-body">
+                <div style="height: 350px;">
+                    <canvas id="speciesYieldChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-droplet me-2"></i>含水率对成炭率的影响</h5>
+            </div>
+            <div class="card-body">
+                <div style="height: 350px;">
+                    <canvas id="moistureYieldChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-calendar3 me-2"></i>存放时长对成炭率的影响</h5>
+            </div>
+            <div class="card-body">
+                <div style="height: 350px;">
+                    <canvas id="storageYieldChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-bar-chart me-2"></i>不同供应商的评级分布</h5>
+            </div>
+            <div class="card-body">
+                <div style="height: 350px;">
+                    <canvas id="supplierGradeChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-bar-chart me-2"></i>不同树种的评级分布</h5>
+            </div>
+            <div class="card-body">
+                <div style="height: 350px;">
+                    <canvas id="speciesGradeChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-table me-2"></i>详细分析数据</h5>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>烧炭批次</th>
+                        <th>原料批次</th>
+                        <th>供应商</th>
+                        <th>树种</th>
+                        <th>含水率</th>
+                        <th>存放天数</th>
+                        <th>领用重量</th>
+                        <th>成炭率</th>
+                        <th>评级</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in analysis_data %}
+                    <tr>
+                        <td><code>{{ item.batch.batch_no }}</code></td>
+                        <td><code>{{ item.material_batch.batch_no }}</code></td>
+                        <td>{{ item.material_batch.supplier.name }}</td>
+                        <td>{{ item.material_batch.get_wood_species_display }}</td>
+                        <td>
+                            {% if item.material_batch.moisture_content %}
+                                <span class="{% if item.material_batch.moisture_content > 25 %}text-danger
+                                    {% elif item.material_batch.moisture_content > 15 %}text-warning
+                                    {% else %}text-success{% endif %}">
+                                    {{ item.material_batch.moisture_content }}%
+                                </span>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="{% if item.material_batch.storage_days > 60 %}text-danger
+                                {% elif item.material_batch.storage_days > 30 %}text-warning
+                                {% else %}text-success{% endif %}">
+                                {{ item.material_batch.storage_days }} 天
+                            </span>
+                        </td>
+                        <td>{{ item.weight }} kg</td>
+                        <td>
+                            {% if item.batch.yield_rate %}
+                                <strong class="{% if item.batch.yield_rate >= 25 %}text-success
+                                    {% elif item.batch.yield_rate >= 18 %}text-warning
+                                    {% else %}text-danger{% endif %}">
+                                    {{ item.batch.yield_rate }}%
+                                </strong>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if item.batch.rating %}
+                                <span class="badge bg-{% if item.batch.rating.grade == 'excellent' %}success
+                                    {% elif item.batch.rating.grade == 'good' %}primary
+                                    {% elif item.batch.rating.grade == 'medium' %}info
+                                    {% elif item.batch.rating.grade == 'poor' %}warning text-dark
+                                    {% else %}danger{% endif %}">
+                                    {{ item.batch.rating.get_grade_display }}
+                                </span>
+                            {% else %}
+                                <span class="text-muted small">未评</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="9" class="text-center text-muted py-5">
+                            <i class="bi bi-inbox fs-1"></i>
+                            <p class="mt-2 mb-0">暂无分析数据</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const supplierLabels = {{ supplier_labels_json|safe }};
+const supplierYieldData = {{ supplier_yield_data_json|safe }};
+const speciesLabels = {{ species_labels_json|safe }};
+const speciesYieldData = {{ species_yield_data_json|safe }};
+const moistureLabels = {{ moisture_labels_json|safe }};
+const moistureYieldData = {{ moisture_yield_data_json|safe }};
+const storageLabels = {{ storage_labels_json|safe }};
+const storageYieldData = {{ storage_yield_data_json|safe }};
+const supplierGradeLabels = {{ supplier_grade_labels_json|safe }};
+const supplierGradeData = {{ supplier_grade_data_json|safe }};
+const speciesGradeLabels = {{ species_grade_labels_json|safe }};
+const speciesGradeData = {{ species_grade_data_json|safe }};
+
+const commonOpts = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { position: 'top' } }
+};
+
+const barColors = [
+    'rgba(54, 162, 235, 0.8)',
+    'rgba(255, 99, 132, 0.8)',
+    'rgba(255, 206, 86, 0.8)',
+    'rgba(75, 192, 192, 0.8)',
+    'rgba(153, 102, 255, 0.8)',
+    'rgba(255, 159, 64, 0.8)',
+    'rgba(199, 199, 199, 0.8)',
+];
+
+new Chart(document.getElementById('supplierYieldChart'), {
+    type: 'bar',
+    data: {
+        labels: supplierLabels,
+        datasets: [{
+            label: '平均成炭率 (%)',
+            data: supplierYieldData,
+            backgroundColor: barColors,
+            borderColor: barColors.map(c => c.replace('0.8', '1')),
+            borderWidth: 2,
+            borderRadius: 6,
+        }]
+    },
+    options: {
+        ...commonOpts,
+        scales: {
+            y: {
+                title: { display: true, text: '成炭率 (%)' },
+                beginAtZero: true,
+                max: 40,
+                ticks: { callback: v => v + '%' }
+            }
+        }
+    }
+});
+
+new Chart(document.getElementById('speciesYieldChart'), {
+    type: 'bar',
+    data: {
+        labels: speciesLabels,
+        datasets: [{
+            label: '平均成炭率 (%)',
+            data: speciesYieldData,
+            backgroundColor: barColors,
+            borderColor: barColors.map(c => c.replace('0.8', '1')),
+            borderWidth: 2,
+            borderRadius: 6,
+        }]
+    },
+    options: {
+        ...commonOpts,
+        scales: {
+            y: {
+                title: { display: true, text: '成炭率 (%)' },
+                beginAtZero: true,
+                max: 40,
+                ticks: { callback: v => v + '%' }
+            }
+        }
+    }
+});
+
+new Chart(document.getElementById('moistureYieldChart'), {
+    type: 'scatter',
+    data: {
+        datasets: [{
+            label: '数据点',
+            data: moistureLabels.map((m, i) => ({ x: m, y: moistureYieldData[i] })),
+            backgroundColor: 'rgba(13, 202, 240, 0.8)',
+            borderColor: 'rgba(13, 202, 240, 1)',
+            borderWidth: 2,
+            pointRadius: 8,
+            pointHoverRadius: 12,
+        }]
+    },
+    options: {
+        ...commonOpts,
+        plugins: {
+            ...commonOpts.plugins,
+            tooltip: {
+                callbacks: {
+                    label: function(ctx) {
+                        return ['含水率: ' + ctx.raw.x + '%', '成炭率: ' + ctx.raw.y + '%'];
+                    }
+                }
+            }
+        },
+        scales: {
+            x: { title: { display: true, text: '含水率 (%)' }, beginAtZero: true, max: 50 },
+            y: {
+                title: { display: true, text: '成炭率 (%)' },
+                beginAtZero: true,
+                max: 40,
+                ticks: { callback: v => v + '%' }
+            }
+        }
+    }
+});
+
+new Chart(document.getElementById('storageYieldChart'), {
+    type: 'scatter',
+    data: {
+        datasets: [{
+            label: '数据点',
+            data: storageLabels.map((s, i) => ({ x: s, y: storageYieldData[i] })),
+            backgroundColor: 'rgba(255, 193, 7, 0.8)',
+            borderColor: 'rgba(255, 193, 7, 1)',
+            borderWidth: 2,
+            pointRadius: 8,
+            pointHoverRadius: 12,
+        }]
+    },
+    options: {
+        ...commonOpts,
+        plugins: {
+            ...commonOpts.plugins,
+            tooltip: {
+                callbacks: {
+                    label: function(ctx) {
+                        return ['存放天数: ' + ctx.raw.x + '天', '成炭率: ' + ctx.raw.y + '%'];
+                    }
+                }
+            }
+        },
+        scales: {
+            x: { title: { display: true, text: '存放天数 (天)' }, beginAtZero: true },
+            y: {
+                title: { display: true, text: '成炭率 (%)' },
+                beginAtZero: true,
+                max: 40,
+                ticks: { callback: v => v + '%' }
+            }
+        }
+    }
+});
+
+new Chart(document.getElementById('supplierGradeChart'), {
+    type: 'bar',
+    data: {
+        labels: supplierGradeLabels,
+        datasets: [
+            {
+                label: '特级',
+                data: supplierGradeData.map(d => d.excellent),
+                backgroundColor: 'rgba(25, 135, 84, 0.8)',
+                borderColor: 'rgba(25, 135, 84, 1)',
+                borderWidth: 1,
+            },
+            {
+                label: '一级',
+                data: supplierGradeData.map(d => d.good),
+                backgroundColor: 'rgba(13, 110, 253, 0.8)',
+                borderColor: 'rgba(13, 110, 253, 1)',
+                borderWidth: 1,
+            },
+            {
+                label: '二级',
+                data: supplierGradeData.map(d => d.medium),
+                backgroundColor: 'rgba(13, 202, 240, 0.8)',
+                borderColor: 'rgba(13, 202, 240, 1)',
+                borderWidth: 1,
+            },
+            {
+                label: '三级',
+                data: supplierGradeData.map(d => d.poor),
+                backgroundColor: 'rgba(255, 193, 7, 0.8)',
+                borderColor: 'rgba(255, 193, 7, 1)',
+                borderWidth: 1,
+            },
+            {
+                label: '等外品',
+                data: supplierGradeData.map(d => d.reject),
+                backgroundColor: 'rgba(220, 53, 69, 0.8)',
+                borderColor: 'rgba(220, 53, 69, 1)',
+                borderWidth: 1,
+            }
+        ]
+    },
+    options: {
+        ...commonOpts,
+        scales: {
+            x: { stacked: true },
+            y: {
+                stacked: true,
+                title: { display: true, text: '批次数量' },
+                beginAtZero: true
+            }
+        }
+    }
+});
+
+new Chart(document.getElementById('speciesGradeChart'), {
+    type: 'bar',
+    data: {
+        labels: speciesGradeLabels,
+        datasets: [
+            {
+                label: '特级',
+                data: speciesGradeData.map(d => d.excellent),
+                backgroundColor: 'rgba(25, 135, 84, 0.8)',
+                borderColor: 'rgba(25, 135, 84, 1)',
+                borderWidth: 1,
+            },
+            {
+                label: '一级',
+                data: speciesGradeData.map(d => d.good),
+                backgroundColor: 'rgba(13, 110, 253, 0.8)',
+                borderColor: 'rgba(13, 110, 253, 1)',
+                borderWidth: 1,
+            },
+            {
+                label: '二级',
+                data: speciesGradeData.map(d => d.medium),
+                backgroundColor: 'rgba(13, 202, 240, 0.8)',
+                borderColor: 'rgba(13, 202, 240, 1)',
+                borderWidth: 1,
+            },
+            {
+                label: '三级',
+                data: speciesGradeData.map(d => d.poor),
+                backgroundColor: 'rgba(255, 193, 7, 0.8)',
+                borderColor: 'rgba(255, 193, 7, 1)',
+                borderWidth: 1,
+            },
+            {
+                label: '等外品',
+                data: speciesGradeData.map(d => d.reject),
+                backgroundColor: 'rgba(220, 53, 69, 0.8)',
+                borderColor: 'rgba(220, 53, 69, 1)',
+                borderWidth: 1,
+            }
+        ]
+    },
+    options: {
+        ...commonOpts,
+        scales: {
+            x: { stacked: true },
+            y: {
+                stacked: true,
+                title: { display: true, text: '批次数量' },
+                beginAtZero: true
+            }
+        }
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,214 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ batch.batch_no }} - 批次追溯{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2>
+            <i class="bi bi-diagram-3 me-2"></i>
+            批次追溯：<code class="fs-4">{{ batch.batch_no }}</code>
+            {% if batch.finish_date %}
+                <span class="badge bg-success ms-2">已完成</span>
+            {% else %}
+                <span class="badge bg-info ms-2">{{ batch.current_stage }}</span>
+            {% endif %}
+        </h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <div class="btn-group">
+            <a href="{% url 'kiln_app:batch_list' %}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> 返回批次列表
+            </a>
+            <a href="{% url 'kiln_app:batch_detail' batch.pk %}" class="btn btn-outline-primary">
+                <i class="bi bi-eye"></i> 查看批次详情
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>烧炭批次信息</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <p class="text-muted small mb-1">炭窑</p>
+                        <p class="mb-0 fw-bold">{{ batch.kiln.name }}</p>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <p class="text-muted small mb-1">原料类型</p>
+                        <p class="mb-0 fw-bold">{{ batch.get_material_type_display }}</p>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <p class="text-muted small mb-1">原料重量</p>
+                        <p class="mb-0 fw-bold text-primary">{{ batch.material_weight }} kg</p>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <p class="text-muted small mb-1">成炭重量</p>
+                        <p class="mb-0 fw-bold text-success">
+                            {% if batch.charcoal_weight %}{{ batch.charcoal_weight }} kg{% else %}-{% endif %}
+                        </p>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <p class="text-muted small mb-1">成炭率</p>
+                        <p class="mb-0 fw-bold">
+                            {% if batch.yield_rate %}
+                                <span class="{% if batch.yield_rate >= 25 %}text-success{% elif batch.yield_rate >= 18 %}text-warning{% else %}text-danger{% endif %}">
+                                    {{ batch.yield_rate }}%
+                                </span>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <p class="text-muted small mb-1">评级</p>
+                        <p class="mb-0">
+                            {% if batch.rating %}
+                                <span class="badge bg-{% if batch.rating.grade == 'excellent' %}success
+                                    {% elif batch.rating.grade == 'good' %}primary
+                                    {% elif batch.rating.grade == 'medium' %}info
+                                    {% elif batch.rating.grade == 'poor' %}warning text-dark
+                                    {% else %}danger{% endif %}">
+                                    {{ batch.rating.get_grade_display }}
+                                </span>
+                                {% if batch.rating.total_score %}
+                                    <span class="ms-2 fw-bold">{{ batch.rating.total_score }}分</span>
+                                {% endif %}
+                            {% else %}
+                                <span class="text-muted">未评</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-graph-up me-2"></i>追溯概览</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <p class="text-muted small mb-1">使用原料批次数量</p>
+                        <h3 class="mb-0 text-primary">{{ material_issues|length }}</h3>
+                    </div>
+                    <div class="col-md-6">
+                        <p class="text-muted small mb-1">供应商数量</p>
+                        <h3 class="mb-0 text-info">{{ supplier_count }}</h3>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <p class="text-muted small mb-1">平均含水率</p>
+                        <h3 class="mb-0 {% if avg_moisture > 25 %}text-danger{% elif avg_moisture > 15 %}text-warning{% else %}text-success{% endif %}">
+                            {{ avg_moisture|floatformat:2 }}%
+                        </h3>
+                    </div>
+                    <div class="col-md-6">
+                        <p class="text-muted small mb-1">平均存放天数</p>
+                        <h3 class="mb-0 {% if avg_storage_days > 60 %}text-danger{% elif avg_storage_days > 30 %}text-warning{% else %}text-success{% endif %}">
+                            {{ avg_storage_days|floatformat:0 }} 天
+                        </h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-box-seam me-2"></i>使用的原料批次明细</h5>
+        <span class="badge bg-primary">{{ material_issues|length }} 条记录</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>原料批次号</th>
+                        <th>供应商</th>
+                        <th>木材种类</th>
+                        <th>领用重量</th>
+                        <th>入库重量</th>
+                        <th>初始含水率</th>
+                        <th>到货日期</th>
+                        <th>存放天数</th>
+                        <th>领料日期</th>
+                        <th>质检等级</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for issue in material_issues %}
+                    <tr>
+                        <td><code class="fw-bold">{{ issue.material_batch.batch_no }}</code></td>
+                        <td>{{ issue.material_batch.supplier.name }}</td>
+                        <td>{{ issue.material_batch.get_wood_species_display }}</td>
+                        <td><strong class="text-primary">{{ issue.weight }} kg</strong></td>
+                        <td>{{ issue.material_batch.total_weight }} kg</td>
+                        <td>
+                            {% if issue.material_batch.moisture_content %}
+                                <span class="{% if issue.material_batch.moisture_content > 25 %}text-danger
+                                    {% elif issue.material_batch.moisture_content > 15 %}text-warning
+                                    {% else %}text-success{% endif %}">
+                                    {{ issue.material_batch.moisture_content }}%
+                                </span>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ issue.material_batch.arrival_date|date:"Y-m-d" }}</td>
+                        <td>
+                            <span class="{% if issue.material_batch.is_expired %}text-danger
+                                {% elif issue.material_batch.days_until_expiry <= 7 %}text-warning
+                                {% else %}text-success{% endif %}">
+                                {{ issue.material_batch.storage_days }} 天
+                            </span>
+                        </td>
+                        <td>{{ issue.issue_date|date:"Y-m-d" }}</td>
+                        <td>
+                            {% if issue.material_batch.quality_grade %}
+                                <span class="badge bg-{% if issue.material_batch.quality_grade == 'excellent' %}success
+                                    {% elif issue.material_batch.quality_grade == 'good' %}primary
+                                    {% elif issue.material_batch.quality_grade == 'medium' %}info
+                                    {% elif issue.material_batch.quality_grade == 'poor' %}warning text-dark
+                                    {% else %}danger{% endif %}">
+                                    {{ issue.material_batch.get_quality_grade_display }}
+                                </span>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{% url 'kiln_app:material_batch_detail' issue.material_batch.pk %}" class="btn btn-sm btn-outline-info">
+                                <i class="bi bi-eye"></i> 详情
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="11" class="text-center text-muted py-5">
+                            <i class="bi bi-inbox fs-1"></i>
+                            <p class="mt-2 mb-0">该批次暂无原料领用记录</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,222 @@
+{% extends 'base.html' %}
+
+{% block title %}原料批次管理 - 炭窑作坊管理系统{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2><i class="bi bi-box me-2"></i>原料批次管理</h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{% url 'kiln_app:material_batch_create' %}" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i> 入库登记
+        </a>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">供应商</label>
+                <select name="supplier" class="form-select">
+                    <option value="">全部供应商</option>
+                    {% for s in suppliers %}
+                        <option value="{{ s.pk }}" {% if supplier_filter == s.pk|stringformat:"s" %}selected{% endif %}>{{ s.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">木材种类</label>
+                <select name="wood_species" class="form-select">
+                    <option value="">全部树种</option>
+                    {% for value, label in wood_species %}
+                        <option value="{{ value }}" {% if wood_species_filter == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">库存状态</label>
+                <select name="storage_status" class="form-select">
+                    <option value="">全部状态</option>
+                    <option value="in_stock" {% if storage_status_filter == 'in_stock' %}selected{% endif %}>在库</option>
+                    <option value="partial_used" {% if storage_status_filter == 'partial_used' %}selected{% endif %}>部分领用</option>
+                    <option value="used_up" {% if storage_status_filter == 'used_up' %}selected{% endif %}>已用完</option>
+                    <option value="discarded" {% if storage_status_filter == 'discarded' %}selected{% endif %}>已报废</option>
+                </select>
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <button type="submit" class="btn btn-outline-primary me-2">
+                    <i class="bi bi-filter"></i> 筛选
+                </button>
+                <a href="{% url 'kiln_app:material_batch_list' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-x-circle"></i> 重置
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">原料批次总数</p>
+                <h3 class="mb-0 text-primary">{{ total_batches }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">在库总量</p>
+                <h3 class="mb-0 text-success">{{ total_stock_weight }} kg</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">在库批次</p>
+                <h3 class="mb-0 text-info">{{ in_stock_count }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card {% if warning_count > 0 %}stat-danger{% endif %}">
+            <div class="card-body">
+                <p class="text-muted small mb-1">预警批次</p>
+                <h3 class="mb-0 {% if warning_count > 0 %}text-danger{% else %}text-success{% endif %}">{{ warning_count }}</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>原料批次号</th>
+                        <th>供应商</th>
+                        <th>木材种类</th>
+                        <th>入库重量</th>
+                        <th>已用重量</th>
+                        <th>剩余重量</th>
+                        <th>初始含水率</th>
+                        <th>到货日期</th>
+                        <th>存放天数</th>
+                        <th>库存状态</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for mb in material_batches %}
+                    <tr>
+                        <td><code class="fw-bold">{{ mb.batch_no }}</code></td>
+                        <td>{{ mb.supplier.name }}</td>
+                        <td>{{ mb.get_wood_species_display }}</td>
+                        <td>{{ mb.total_weight }} kg</td>
+                        <td>{{ mb.used_weight }} kg</td>
+                        <td>
+                            <strong class="{% if mb.remaining_weight <= 0 %}text-muted
+                                {% elif mb.remaining_weight < 100 %}text-warning
+                                {% else %}text-success{% endif %}">
+                                {{ mb.remaining_weight }} kg
+                            </strong>
+                        </td>
+                        <td>
+                            {% if mb.moisture_content %}
+                                {{ mb.moisture_content }}%
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ mb.arrival_date|date:"Y-m-d" }}</td>
+                        <td>
+                            <span class="
+                                {% if mb.is_expired %}text-danger
+                                {% elif mb.days_until_expiry <= 7 %}text-warning
+                                {% else %}text-success{% endif %}
+                            ">{{ mb.storage_days }} 天</span>
+                            {% if mb.is_expired %}
+                                <span class="badge bg-danger ms-1">已超期</span>
+                            {% elif mb.days_until_expiry <= 7 %}
+                                <span class="badge bg-warning text-dark ms-1">临期</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if mb.storage_status == 'in_stock' %}
+                                <span class="badge bg-success">在库</span>
+                            {% elif mb.storage_status == 'partial_used' %}
+                                <span class="badge bg-info">部分领用</span>
+                            {% elif mb.storage_status == 'used_up' %}
+                                <span class="badge bg-secondary">已用完</span>
+                            {% else %}
+                                <span class="badge bg-danger">已报废</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <a href="{% url 'kiln_app:material_batch_detail' mb.pk %}" class="btn btn-outline-info">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                <a href="{% url 'kiln_app:material_batch_edit' mb.pk %}" class="btn btn-outline-primary">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <button type="button" class="btn btn-outline-danger"
+                                        onclick="confirmDelete('{{ mb.pk }}', '{{ mb.batch_no }}')">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="11" class="text-center text-muted py-5">
+                            <i class="bi bi-inbox fs-1"></i>
+                            <p class="mt-2 mb-0">暂无原料批次记录，请点击上方按钮进行入库登记</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-exclamation-triangle text-warning me-2"></i>确认删除</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>确定要删除原料批次 <strong id="deleteName"></strong> 吗？</p>
+                <p class="text-danger small mb-0"><i class="bi bi-info-circle"></i> 若该批次有关联的领料或损耗记录，则无法删除。</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <form id="deleteForm" method="post" style="display:inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-trash"></i> 确认删除
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function confirmDelete(pk, name) {
+    document.getElementById('deleteName').textContent = name;
+    document.getElementById('deleteForm').action = "{% url 'kiln_app:material_batch_list' %}" + pk + "/delete/";
+    new bootstrap.Modal(document.getElementById('deleteModal')).show();
+}
+</script>
+{% endblock %}

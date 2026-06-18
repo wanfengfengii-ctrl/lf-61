@@ -1,0 +1,177 @@
+{% extends 'base.html' %}
+
+{% block title %}库存预警 - 炭窑作坊管理系统{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2><i class="bi bi-bell me-2"></i>库存预警管理</h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{% url 'kiln_app:material_batch_list' %}" class="btn btn-outline-secondary me-2">
+            <i class="bi bi-box"></i> 原料批次
+        </a>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">预警类型</label>
+                <select name="warning_type" class="form-select">
+                    <option value="">全部类型</option>
+                    <option value="low_stock" {% if warning_type_filter == 'low_stock' %}selected{% endif %}>低库存预警</option>
+                    <option value="expiring" {% if warning_type_filter == 'expiring' %}selected{% endif %}>临期预警</option>
+                    <option value="expired" {% if warning_type_filter == 'expired' %}selected{% endif %}>超期存放预警</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">预警级别</label>
+                <select name="warning_level" class="form-select">
+                    <option value="">全部级别</option>
+                    <option value="info" {% if warning_level_filter == 'info' %}selected{% endif %}>提示</option>
+                    <option value="warning" {% if warning_level_filter == 'warning' %}selected{% endif %}>警告</option>
+                    <option value="critical" {% if warning_level_filter == 'critical' %}selected{% endif %}>严重</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">处理状态</label>
+                <select name="is_resolved" class="form-select">
+                    <option value="">全部状态</option>
+                    <option value="false" {% if is_resolved_filter == 'false' %}selected{% endif %}>未处理</option>
+                    <option value="true" {% if is_resolved_filter == 'true' %}selected{% endif %}>已处理</option>
+                </select>
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <button type="submit" class="btn btn-outline-primary me-2">
+                    <i class="bi bi-filter"></i> 筛选
+                </button>
+                <a href="{% url 'kiln_app:stock_warning_list' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-x-circle"></i> 重置
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">预警总数</p>
+                <h3 class="mb-0 text-primary">{{ total_warnings }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">未处理</p>
+                <h3 class="mb-0 text-danger">{{ unresolved_count }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">严重预警</p>
+                <h3 class="mb-0 text-danger">{{ critical_count }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">已处理</p>
+                <h3 class="mb-0 text-success">{{ resolved_count }}</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>预警时间</th>
+                        <th>原料批次</th>
+                        <th>树种</th>
+                        <th>预警类型</th>
+                        <th>预警级别</th>
+                        <th>当前库存</th>
+                        <th>预警阈值</th>
+                        <th>预警信息</th>
+                        <th>状态</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for warning in warnings %}
+                    <tr {% if not warning.is_resolved and warning.warning_level == 'critical' %}class="table-danger"{% elif not warning.is_resolved %}class="table-warning"{% endif %}>
+                        <td class="small">{{ warning.warning_date|date:"Y-m-d H:i" }}</td>
+                        <td><code>{{ warning.material_batch.batch_no }}</code></td>
+                        <td>{{ warning.material_batch.get_wood_species_display }}</td>
+                        <td>
+                            {% if warning.warning_type == 'low_stock' %}
+                                <span class="badge bg-warning text-dark">低库存</span>
+                            {% elif warning.warning_type == 'expiring' %}
+                                <span class="badge bg-info">临期</span>
+                            {% else %}
+                                <span class="badge bg-danger">超期</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if warning.warning_level == 'critical' %}
+                                <span class="badge bg-danger">严重</span>
+                            {% elif warning.warning_level == 'warning' %}
+                                <span class="badge bg-warning text-dark">警告</span>
+                            {% else %}
+                                <span class="badge bg-info">提示</span>
+                            {% endif %}
+                        </td>
+                        <td><strong>{{ warning.current_stock }} kg</strong></td>
+                        <td>
+                            {% if warning.threshold %}
+                                {{ warning.threshold }}{% if warning.warning_type == 'low_stock' %} kg{% else %} 天{% endif %}
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="small">{{ warning.message|truncatechars:50 }}</td>
+                        <td>
+                            {% if warning.is_resolved %}
+                                <span class="badge bg-success">已处理</span>
+                            {% else %}
+                                <span class="badge bg-warning text-dark">未处理</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <a href="{% url 'kiln_app:material_batch_detail' warning.material_batch.pk %}" class="btn btn-outline-info">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                {% if not warning.is_resolved %}
+                                    <a href="{% url 'kiln_app:stock_warning_resolve' warning.pk %}" class="btn btn-outline-success">
+                                        <i class="bi bi-check-circle"></i> 处理
+                                    </a>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="10" class="text-center text-muted py-5">
+                            <i class="bi bi-inbox fs-1"></i>
+                            <p class="mt-2 mb-0">暂无库存预警</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,143 @@
+{% extends 'base.html' %}
+
+{% block title %}处理预警 - 炭窑作坊管理系统{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2>
+            <i class="bi bi-check-circle me-2"></i>
+            处理预警
+        </h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{% url 'kiln_app:stock_warning_list' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> 返回列表
+        </a>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header {% if warning.warning_level == 'critical' %}bg-danger{% elif warning.warning_level == 'warning' %}bg-warning text-dark{% else %}bg-info{% endif %} text-white">
+        <h5 class="mb-0"><i class="bi bi-exclamation-triangle me-2"></i>预警详情</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-4 mb-3">
+                <p class="text-muted small mb-1">预警时间</p>
+                <p class="mb-0 fw-bold">{{ warning.warning_date|date:"Y-m-d H:i" }}</p>
+            </div>
+            <div class="col-md-4 mb-3">
+                <p class="text-muted small mb-1">预警类型</p>
+                <p class="mb-0">
+                    {% if warning.warning_type == 'low_stock' %}
+                        <span class="badge bg-warning text-dark">低库存预警</span>
+                    {% elif warning.warning_type == 'expiring' %}
+                        <span class="badge bg-info">临期预警</span>
+                    {% else %}
+                        <span class="badge bg-danger">超期存放预警</span>
+                    {% endif %}
+                </p>
+            </div>
+            <div class="col-md-4 mb-3">
+                <p class="text-muted small mb-1">预警级别</p>
+                <p class="mb-0">
+                    {% if warning.warning_level == 'critical' %}
+                        <span class="badge bg-danger">严重</span>
+                    {% elif warning.warning_level == 'warning' %}
+                        <span class="badge bg-warning text-dark">警告</span>
+                    {% else %}
+                        <span class="badge bg-info">提示</span>
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-md-4 mb-3">
+                <p class="text-muted small mb-1">原料批次</p>
+                <p class="mb-0 fw-bold"><code>{{ warning.material_batch.batch_no }}</code></p>
+            </div>
+            <div class="col-md-4 mb-3">
+                <p class="text-muted small mb-1">当前库存</p>
+                <p class="mb-0 fw-bold">{{ warning.current_stock }} kg</p>
+            </div>
+            <div class="col-md-4 mb-3">
+                <p class="text-muted small mb-1">预警阈值</p>
+                <p class="mb-0 fw-bold">
+                    {% if warning.threshold %}
+                        {{ warning.threshold }}{% if warning.warning_type == 'low_stock' %} kg{% else %} 天{% endif %}
+                    {% else %}
+                        <span class="text-muted">-</span>
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-md-12">
+                <p class="text-muted small mb-1">预警信息</p>
+                <p class="mb-0">{{ warning.message }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-pencil me-2"></i>处理信息</h5>
+    </div>
+    <div class="card-body">
+        <form method="post" novalidate>
+            {% csrf_token %}
+            {% if form.non_field_errors %}
+                <div class="alert alert-danger">
+                    {% for error in form.non_field_errors %}
+                        <p class="mb-0"><i class="bi bi-exclamation-circle"></i> {{ error }}</p>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            <div class="mb-3">
+                <div class="form-check">
+                    {{ form.is_resolved }}
+                    <label class="form-check-label fw-bold" for="{{ form.is_resolved.id_for_label }}">
+                        {{ form.is_resolved.label }}
+                    </label>
+                </div>
+                {% if form.is_resolved.errors %}
+                    <div class="invalid-feedback d-block">
+                        {% for error in form.is_resolved.errors %}{{ error }}{% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">{{ form.resolved_by.label }}</label>
+                {{ form.resolved_by }}
+                {% if form.resolved_by.errors %}
+                    <div class="invalid-feedback d-block">
+                        {% for error in form.resolved_by.errors %}{{ error }}{% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">{{ form.resolution_notes.label }}</label>
+                {{ form.resolution_notes }}
+                {% if form.resolution_notes.errors %}
+                    <div class="invalid-feedback d-block">
+                        {% for error in form.resolution_notes.errors %}{{ error }}{% endfor %}
+                    </div>
+                {% endif %}
+                <div class="form-text">请详细说明处理措施和结果</div>
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-circle"></i> 保存处理
+                </button>
+                <a href="{% url 'kiln_app:stock_warning_list' %}" class="btn btn-secondary">取消</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

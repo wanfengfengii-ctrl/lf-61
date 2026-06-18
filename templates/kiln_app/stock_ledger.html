@@ -1,0 +1,152 @@
+{% extends 'base.html' %}
+
+{% block title %}库存台账 - 炭窑作坊管理系统{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2><i class="bi bi-journal-text me-2"></i>库存台账</h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{% url 'kiln_app:material_batch_list' %}" class="btn btn-outline-secondary me-2">
+            <i class="bi bi-box"></i> 原料批次
+        </a>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">原料批次</label>
+                <select name="material_batch" class="form-select">
+                    <option value="">全部批次</option>
+                    {% for mb in material_batches %}
+                        <option value="{{ mb.pk }}" {% if material_batch_filter == mb.pk|stringformat:"s" %}selected{% endif %}>{{ mb.batch_no }} - {{ mb.get_wood_species_display }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">交易类型</label>
+                <select name="transaction_type" class="form-select">
+                    <option value="">全部类型</option>
+                    <option value="stock_in" {% if transaction_type_filter == 'stock_in' %}selected{% endif %}>入库</option>
+                    <option value="stock_out" {% if transaction_type_filter == 'stock_out' %}selected{% endif %}>领料出库</option>
+                    <option value="loss" {% if transaction_type_filter == 'loss' %}selected{% endif %}>损耗</option>
+                    <option value="adjust" {% if transaction_type_filter == 'adjust' %}selected{% endif %}>库存调整</option>
+                    <option value="return" {% if transaction_type_filter == 'return' %}selected{% endif %}>退库</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">起始日期</label>
+                <input type="date" name="date_from" class="form-control" value="{{ date_from }}">
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <button type="submit" class="btn btn-outline-primary me-2">
+                    <i class="bi bi-filter"></i> 筛选
+                </button>
+                <a href="{% url 'kiln_app:stock_ledger' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-x-circle"></i> 重置
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">记录总数</p>
+                <h3 class="mb-0 text-primary">{{ total_entries }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">总入库量</p>
+                <h3 class="mb-0 text-success">{{ total_in }} kg</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">总出库量</p>
+                <h3 class="mb-0 text-danger">{{ total_out }} kg</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">总损耗量</p>
+                <h3 class="mb-0 text-warning">{{ total_loss }} kg</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>时间</th>
+                        <th>原料批次号</th>
+                        <th>树种</th>
+                        <th>交易类型</th>
+                        <th>数量</th>
+                        <th>结存数量</th>
+                        <th>关联单号</th>
+                        <th>操作人</th>
+                        <th>备注</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entry in ledger_entries %}
+                    <tr>
+                        <td class="small">{{ entry.transaction_date|date:"Y-m-d H:i" }}</td>
+                        <td><code>{{ entry.material_batch.batch_no }}</code></td>
+                        <td>{{ entry.material_batch.get_wood_species_display }}</td>
+                        <td>
+                            {% if entry.transaction_type == 'stock_in' %}
+                                <span class="badge bg-success">入库</span>
+                            {% elif entry.transaction_type == 'stock_out' %}
+                                <span class="badge bg-primary">领料出库</span>
+                            {% elif entry.transaction_type == 'loss' %}
+                                <span class="badge bg-danger">损耗</span>
+                            {% elif entry.transaction_type == 'adjust' %}
+                                <span class="badge bg-info">库存调整</span>
+                            {% else %}
+                                <span class="badge bg-secondary">退库</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if entry.transaction_type == 'stock_in' or entry.transaction_type == 'return' %}
+                                <span class="text-success"><strong>+{{ entry.quantity }} kg</strong></span>
+                            {% else %}
+                                <span class="text-danger"><strong>-{{ entry.quantity }} kg</strong></span>
+                            {% endif %}
+                        </td>
+                        <td><strong>{{ entry.balance_after }} kg</strong></td>
+                        <td class="small">{{ entry.reference_no|default:"-" }}</td>
+                        <td class="small">{{ entry.operator|default:"-" }}</td>
+                        <td class="small">{{ entry.notes|default:"-" }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="9" class="text-center text-muted py-5">
+                            <i class="bi bi-inbox fs-1"></i>
+                            <p class="mt-2 mb-0">暂无库存台账记录</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
