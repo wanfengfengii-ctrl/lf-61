@@ -1,0 +1,175 @@
+{% extends 'base.html' %}
+
+{% block title %}配方偏差记录 - 炭窑作坊管理系统{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2><i class="bi bi-exclamation-triangle me-2"></i>配方偏差记录</h2>
+        <p class="text-muted mb-0">实时监控批次执行与标准配方的偏差情况</p>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <h6 class="card-title">正常</h6>
+                <h2 class="mb-0">{{ normal_count }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <h6 class="card-title">轻微偏差</h6>
+                <h2 class="mb-0">{{ slight_count }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-dark">
+            <div class="card-body">
+                <h6 class="card-title">中等偏差</h6>
+                <h2 class="mb-0">{{ moderate_count }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-danger text-white">
+            <div class="card-body">
+                <h6 class="card-title">严重偏差</h6>
+                <h2 class="mb-0">{{ severe_count }}</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">偏差类型</label>
+                <select name="deviation_type" class="form-select">
+                    <option value="">全部类型</option>
+                    {% for value, label in type_choices %}
+                    <option value="{{ value }}" {% if type_filter == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">偏差级别</label>
+                <select name="deviation_level" class="form-select">
+                    <option value="">全部级别</option>
+                    {% for value, label in level_choices %}
+                    <option value="{{ value }}" {% if level_filter == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">处理状态</label>
+                <select name="is_resolved" class="form-select">
+                    <option value="">全部状态</option>
+                    <option value="false" {% if is_resolved_filter == 'false' %}selected{% endif %}>未处理</option>
+                    <option value="true" {% if is_resolved_filter == 'true' %}selected{% endif %}>已处理</option>
+                </select>
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <button type="submit" class="btn btn-outline-primary me-2">
+                    <i class="bi bi-filter"></i> 筛选
+                </button>
+                <a href="{% url 'kiln_app:recipe_deviation_list' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-x-circle"></i> 重置
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>记录时间</th>
+                        <th>批次编号</th>
+                        <th>配方</th>
+                        <th>偏差类型</th>
+                        <th>偏差级别</th>
+                        <th>标准值</th>
+                        <th>实际值</th>
+                        <th>偏差值</th>
+                        <th>状态</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for deviation in deviations %}
+                    <tr>
+                        <td>{{ deviation.record_time|date:"Y-m-d H:i" }}</td>
+                        <td>
+                            <a href="{% url 'kiln_app:batch_detail' deviation.batch.pk %}" class="text-decoration-none">
+                                <code>{{ deviation.batch.batch_no }}</code>
+                            </a>
+                        </td>
+                        <td>
+                            {% if deviation.recipe_stage %}
+                                <small>{{ deviation.recipe_stage.recipe.name }}</small>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>{{ deviation.get_deviation_type_display }}</td>
+                        <td>
+                            {% if deviation.deviation_level == 'severe' %}
+                                <span class="badge bg-danger">严重</span>
+                            {% elif deviation.deviation_level == 'moderate' %}
+                                <span class="badge bg-warning text-dark">中等</span>
+                            {% elif deviation.deviation_level == 'slight' %}
+                                <span class="badge bg-info">轻微</span>
+                            {% else %}
+                                <span class="badge bg-success">正常</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ deviation.standard_value|default:"-" }}</td>
+                        <td>{{ deviation.actual_value|default:"-" }}</td>
+                        <td>
+                            {% if deviation.deviation_value %}
+                                <span class="{% if deviation.deviation_value > 0 %}text-danger{% else %}text-warning{% endif %}">
+                                    {{ deviation.deviation_value }}
+                                </span>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if deviation.is_resolved %}
+                                <span class="badge bg-success">已处理</span>
+                            {% else %}
+                                <span class="badge bg-warning text-dark">待处理</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if not deviation.is_resolved %}
+                                <a href="{% url 'kiln_app:recipe_deviation_resolve' deviation.pk %}" class="btn btn-sm btn-outline-primary">
+                                    处理
+                                </a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="10" class="text-center py-5 text-muted">
+                            <i class="bi bi-check-circle display-4 d-block mb-3"></i>
+                            暂无偏差记录
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

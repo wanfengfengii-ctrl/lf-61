@@ -1,0 +1,119 @@
+{% extends 'base.html' %}
+
+{% block title %}处理偏差 - 配方偏差管理{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'kiln_app:recipe_deviation_list' %}">偏差记录</a></li>
+                <li class="breadcrumb-item active" aria-current="page">处理偏差</li>
+            </ol>
+        </nav>
+        <h2><i class="bi bi-wrench me-2"></i>处理配方偏差</h2>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>偏差详情</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <p class="text-muted mb-1">批次编号</p>
+                        <h6 class="mb-0">
+                            <a href="{% url 'kiln_app:batch_detail' deviation.batch.pk %}" class="text-decoration-none">
+                                {{ deviation.batch.batch_no }}
+                            </a>
+                        </h6>
+                    </div>
+                    <div class="col-md-6">
+                        <p class="text-muted mb-1">记录时间</p>
+                        <h6 class="mb-0">{{ deviation.record_time|date:"Y-m-d H:i:s" }}</h6>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <p class="text-muted mb-1">偏差类型</p>
+                        <h6 class="mb-0">{{ deviation.get_deviation_type_display }}</h6>
+                    </div>
+                    <div class="col-md-6">
+                        <p class="text-muted mb-1">偏差级别</p>
+                        <h6 class="mb-0">
+                            {% if deviation.deviation_level == 'severe' %}
+                                <span class="badge bg-danger">严重</span>
+                            {% elif deviation.deviation_level == 'moderate' %}
+                                <span class="badge bg-warning text-dark">中等</span>
+                            {% elif deviation.deviation_level == 'slight' %}
+                                <span class="badge bg-info">轻微</span>
+                            {% else %}
+                                <span class="badge bg-success">正常</span>
+                            {% endif %}
+                        </h6>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <p class="text-muted mb-1">标准值</p>
+                        <h6 class="mb-0">{{ deviation.standard_value|default:"-" }}</h6>
+                    </div>
+                    <div class="col-md-4">
+                        <p class="text-muted mb-1">实际值</p>
+                        <h6 class="mb-0">{{ deviation.actual_value|default:"-" }}</h6>
+                    </div>
+                    <div class="col-md-4">
+                        <p class="text-muted mb-1">偏差值</p>
+                        <h6 class="mb-0 text-danger">{{ deviation.deviation_value|default:"-" }}</h6>
+                    </div>
+                </div>
+                {% if deviation.description %}
+                <div class="mb-3">
+                    <p class="text-muted mb-1">偏差描述</p>
+                    <p class="mb-0">{{ deviation.description }}</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-pencil-square me-2"></i>处理记录</h5>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    {% if form.errors %}
+                        <div class="alert alert-danger">
+                            <h6 class="alert-heading">请修正以下错误：</h6>
+                            {% for field in form %}
+                                {% for error in field.errors %}
+                                    <div>{{ field.label }}: {{ error }}</div>
+                                {% endfor %}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+
+                    <div class="mb-3">
+                        <label for="{{ form.resolve_note.id_for_label }}" class="form-label">处理说明 <span class="text-danger">*</span></label>
+                        {{ form.resolve_note }}
+                    </div>
+
+                    <div class="d-flex justify-content-end">
+                        <a href="{% url 'kiln_app:recipe_deviation_list' %}" class="btn btn-outline-secondary me-2">
+                            <i class="bi bi-x-circle"></i> 取消
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-circle"></i> 标记为已处理
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

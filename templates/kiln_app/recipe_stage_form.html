@@ -1,0 +1,113 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if form.instance.pk %}编辑阶段{% else %}添加阶段{% endif %} - 配方阶段{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'kiln_app:recipe_list' %}">烧制配方</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'kiln_app:recipe_detail' recipe.pk %}">{{ recipe.name }}</a></li>
+                <li class="breadcrumb-item active" aria-current="page">
+                    {% if form.instance.pk %}编辑阶段{% else %}添加阶段{% endif %}
+                </li>
+            </ol>
+        </nav>
+        <h2>
+            <i class="bi {% if form.instance.pk %}bi-pencil-square{% else %}bi-plus-circle{% endif %} me-2"></i>
+            {% if form.instance.pk %}编辑工艺阶段{% else %}添加工艺阶段{% endif %}
+        </h2>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card">
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    {% if form.errors %}
+                        <div class="alert alert-danger">
+                            <h6 class="alert-heading">请修正以下错误：</h6>
+                            {% for field in form %}
+                                {% for error in field.errors %}
+                                    <div>{{ field.label }}: {{ error }}</div>
+                                {% endfor %}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label for="{{ form.stage_order.id_for_label }}" class="form-label">阶段顺序 <span class="text-danger">*</span></label>
+                            {{ form.stage_order }}
+                        </div>
+                        <div class="col-md-8">
+                            <label for="{{ form.stage_name.id_for_label }}" class="form-label">阶段名称 <span class="text-danger">*</span></label>
+                            {{ form.stage_name }}
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="{{ form.duration_minutes.id_for_label }}" class="form-label">持续时长(分钟) <span class="text-danger">*</span></label>
+                            {{ form.duration_minutes }}
+                        </div>
+                        <div class="col-md-6">
+                            <label for="{{ form.damper_position.id_for_label }}" class="form-label">风门位置</label>
+                            {{ form.damper_position }}
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label for="{{ form.temp_min.id_for_label }}" class="form-label">最低温度(℃) <span class="text-danger">*</span></label>
+                            {{ form.temp_min }}
+                        </div>
+                        <div class="col-md-4">
+                            <label for="{{ form.temp_max.id_for_label }}" class="form-label">最高温度(℃) <span class="text-danger">*</span></label>
+                            {{ form.temp_max }}
+                        </div>
+                        <div class="col-md-4">
+                            <label for="{{ form.temp_target.id_for_label }}" class="form-label">目标温度(℃)</label>
+                            {{ form.temp_target }}
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label for="{{ form.damper_min.id_for_label }}" class="form-label">最小风门(%)</label>
+                            {{ form.damper_min }}
+                        </div>
+                        <div class="col-md-4">
+                            <label for="{{ form.damper_max.id_for_label }}" class="form-label">最大风门(%)</label>
+                            {{ form.damper_max }}
+                        </div>
+                        <div class="col-md-4">
+                            <label for="{{ form.smoke_color.id_for_label }}" class="form-label">烟色</label>
+                            {{ form.smoke_color }}
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="{{ form.operation_points.id_for_label }}" class="form-label">操作要点</label>
+                        {{ form.operation_points }}
+                    </div>
+
+                    <div class="d-flex justify-content-end">
+                        <a href="{% url 'kiln_app:recipe_detail' recipe.pk %}" class="btn btn-outline-secondary me-2">
+                            <i class="bi bi-x-circle"></i> 取消
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-circle"></i>
+                            {% if form.instance.pk %}保存修改{% else %}添加阶段{% endif %}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

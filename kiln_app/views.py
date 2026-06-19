@@ -14,7 +14,8 @@ from .models import (
     Supplier, RawMaterialBatch, MoistureTest,
     StockLedger, MaterialIssue, MaterialLoss, StockWarning,
     PurchasePlan, PurchaseOrder, PurchaseArrival, PurchaseCostSplit,
-    BatchCost, BatchCostItem, CostWarning, SupplierPriceHistory, StockCostLedger
+    BatchCost, BatchCostItem, CostWarning, SupplierPriceHistory, StockCostLedger,
+    FiringRecipe, RecipeStage, RecipeDeviationRecord, RecipeStatistics
 )
 from .forms import (
     KilnForm, BatchForm, TemperatureRecordForm,
@@ -23,9 +24,14 @@ from .forms import (
     MaterialIssueForm, MaterialLossForm, StockWarningResolveForm,
     PurchasePlanForm, PurchasePlanApprovalForm, PurchaseOrderForm,
     PurchaseArrivalForm, PurchaseCostSplitForm, BatchCostForm, BatchCostItemForm,
-    CostWarningResolveForm, SupplierPriceHistoryForm
+    CostWarningResolveForm, SupplierPriceHistoryForm,
+    FiringRecipeForm, RecipeStageForm, RecipeDeviationResolveForm
 )
-from .services import generate_warnings, detect_burning_stage
+from .services import (
+    generate_warnings, detect_burning_stage,
+    check_recipe_deviations, save_recipe_deviations,
+    calculate_recipe_statistics, suggest_recipe, get_recipe_comparison_data
+)
 
 
 def dashboard(request):
@@ -3019,3 +3025,319 @@ def export_price_comparison_csv(request):
         ])
 
     return response
+
+
+def recipe_list(request):
+    recipes = FiringRecipe.objects.all()
+    status_filter = request.GET.get('status', '')
+    species_filter = request.GET.get('wood_species', '')
+    grade_filter = request.GET.get('target_grade', '')
+    search = request.GET.get('search', '')
+
+    if status_filter:
+        recipes = recipes.filter(status=status_filter)
+    if species_filter:
+        recipes = recipes.filter(wood_species=species_filter)
+    if grade_filter:
+        recipes = recipes.filter(target_grade=grade_filter)
+    if search:
+        recipes = recipes.filter(
+            Q(name__icontains=search) | Q(code__icontains=search)
+        )
+
+    total_recipes = recipes.count()
+    active_recipes = recipes.filter(status='active').count()
+
+    context = {
+        'recipes': recipes,
+        'status_filter': status_filter,
+        'species_filter': species_filter,
+        'grade_filter': grade_filter,
+        'search': search,
+        'total_recipes': total_recipes,
+        'active_recipes': active_recipes,
+        'status_choices': FiringRecipe.RECIPE_STATUS,
+        'wood_species_choices': FiringRecipe.WOOD_SPECIES,
+        'grade_choices': FiringRecipe.TARGET_GRADE,
+    }
+    return render(request, 'kiln_app/recipe_list.html', context)
+
+
+def recipe_detail(request, pk):
+    recipe = get_object_or_404(FiringRecipe, pk=pk)
+    stages = recipe.stages.order_by('stage_order')
+    batches = recipe.batches.select_related('rating').order_by('-ignition_date')[:20]
+
+    try:
+        stats = recipe.statistics
+    except RecipeStatistics.DoesNotExist:
+        stats = calculate_recipe_statistics(recipe)
+
+    deviations = RecipeDeviationRecord.objects.filter(
+        batch__recipe=recipe
+    ).select_related('batch').order_by('-record_time')[:20]
+
+    deviation_by_type = {}
+    for d in deviations:
+        dtype = d.deviation_type
+        if dtype not in deviation_by_type:
+            deviation_by_type[dtype] = {'count': 0, 'severe': 0}
+        deviation_by_type[dtype]['count'] += 1
+        if d.deviation_level == 'severe':
+            deviation_by_type[dtype]['severe'] += 1
+
+    context = {
+        'recipe': recipe,
+        'stages': stages,
+        'batches': batches,
+        'stats': stats,
+        'deviations': deviations,
+        'deviation_by_type': deviation_by_type,
+    }
+    return render(request, 'kiln_app/recipe_detail.html', context)
+
+
+def recipe_create(request):
+    if request.method == 'POST':
+        form = FiringRecipeForm(request.POST)
+        if form.is_valid():
+            recipe = form.save()
+            messages.success(request, '烧制配方创建成功！')
+            return redirect('kiln_app:recipe_detail', pk=recipe.pk)
+    else:
+        form = FiringRecipeForm()
+    return render(request, 'kiln_app/recipe_form.html', {'form': form, 'action': '创建'})
+
+
+def recipe_edit(request, pk):
+    recipe = get_object_or_404(FiringRecipe, pk=pk)
+    if request.method == 'POST':
+        form = FiringRecipeForm(request.POST, instance=recipe)
+        if form.is_valid():
+            form.save()
+            messages.success(request, '烧制配方更新成功！')
+            return redirect('kiln_app:recipe_detail', pk=recipe.pk)
+    else:
+        form = FiringRecipeForm(instance=recipe)
+    return render(request, 'kiln_app/recipe_form.html', {'form': form, 'action': '编辑', 'recipe': recipe})
+
+
+def recipe_delete(request, pk):
+    recipe = get_object_or_404(FiringRecipe, pk=pk)
+    try:
+        recipe.delete()
+        messages.success(request, '烧制配方已删除！')
+    except Exception as e:
+        messages.error(request, f'删除失败：{str(e)}')
+    return redirect('kiln_app:recipe_list')
+
+
+def recipe_stage_create(request, recipe_pk):
+    recipe = get_object_or_404(FiringRecipe, pk=recipe_pk)
+    if request.method == 'POST':
+        form = RecipeStageForm(request.POST, recipe=recipe)
+        if form.is_valid():
+            stage = form.save(commit=False)
+            stage.recipe = recipe
+            stage.save()
+            messages.success(request, '配方阶段添加成功！')
+            return redirect('kiln_app:recipe_detail', pk=recipe.pk)
+    else:
+        form = RecipeStageForm(recipe=recipe)
+    return render(request, 'kiln_app/recipe_stage_form.html', {
+        'form': form, 'recipe': recipe, 'action': '添加阶段'
+    })
+
+
+def recipe_stage_edit(request, pk):
+    stage = get_object_or_404(RecipeStage.objects.select_related('recipe'), pk=pk)
+    recipe = stage.recipe
+    if request.method == 'POST':
+        form = RecipeStageForm(request.POST, instance=stage, recipe=recipe)
+        if form.is_valid():
+            form.save()
+            messages.success(request, '配方阶段更新成功！')
+            return redirect('kiln_app:recipe_detail', pk=recipe.pk)
+    else:
+        form = RecipeStageForm(instance=stage, recipe=recipe)
+    return render(request, 'kiln_app/recipe_stage_form.html', {
+        'form': form, 'recipe': recipe, 'stage': stage, 'action': '编辑阶段'
+    })
+
+
+def recipe_stage_delete(request, pk):
+    stage = get_object_or_404(RecipeStage.objects.select_related('recipe'), pk=pk)
+    recipe_pk = stage.recipe.pk
+    stage.delete()
+    messages.success(request, '配方阶段已删除！')
+    return redirect('kiln_app:recipe_detail', pk=recipe_pk)
+
+
+def recipe_deviation_list(request):
+    deviations = RecipeDeviationRecord.objects.select_related(
+        'batch', 'recipe_stage'
+    ).all()
+    type_filter = request.GET.get('deviation_type', '')
+    level_filter = request.GET.get('deviation_level', '')
+    is_resolved_filter = request.GET.get('is_resolved', '')
+
+    if type_filter:
+        deviations = deviations.filter(deviation_type=type_filter)
+    if level_filter:
+        deviations = deviations.filter(deviation_level=level_filter)
+    if is_resolved_filter:
+        deviations = deviations.filter(is_resolved=(is_resolved_filter == 'true'))
+
+    normal_count = deviations.filter(deviation_level='normal').count()
+    slight_count = deviations.filter(deviation_level='slight').count()
+    moderate_count = deviations.filter(deviation_level='moderate').count()
+    severe_count = deviations.filter(deviation_level='severe').count()
+
+    context = {
+        'deviations': deviations,
+        'type_filter': type_filter,
+        'level_filter': level_filter,
+        'is_resolved_filter': is_resolved_filter,
+        'normal_count': normal_count,
+        'slight_count': slight_count,
+        'moderate_count': moderate_count,
+        'severe_count': severe_count,
+        'type_choices': RecipeDeviationRecord.DEVIATION_TYPE,
+        'level_choices': RecipeDeviationRecord.DEVIATION_LEVEL,
+    }
+    return render(request, 'kiln_app/recipe_deviation_list.html', context)
+
+
+def recipe_deviation_resolve(request, pk):
+    deviation = get_object_or_404(RecipeDeviationRecord.objects.select_related('batch'), pk=pk)
+    if request.method == 'POST':
+        form = RecipeDeviationResolveForm(request.POST, instance=deviation)
+        if form.is_valid():
+            deviation = form.save(commit=False)
+            if deviation.is_resolved and not deviation.resolved_time:
+                deviation.resolved_time = timezone.now()
+            deviation.save()
+            messages.success(request, '偏差处理完成！')
+            return redirect('kiln_app:recipe_deviation_list')
+    else:
+        form = RecipeDeviationResolveForm(instance=deviation)
+    return render(request, 'kiln_app/recipe_deviation_resolve.html', {
+        'form': form, 'deviation': deviation
+    })
+
+
+def recipe_analysis(request):
+    species_filter = request.GET.get('wood_species', '')
+    grade_filter = request.GET.get('target_grade', '')
+
+    recipes = FiringRecipe.objects.filter(status='active')
+    if species_filter:
+        recipes = recipes.filter(wood_species=species_filter)
+    if grade_filter:
+        recipes = recipes.filter(target_grade=grade_filter)
+
+    for recipe in recipes:
+        try:
+            recipe.statistics
+        except RecipeStatistics.DoesNotExist:
+            calculate_recipe_statistics(recipe)
+
+    comparison_data = get_recipe_comparison_data(
+        recipe_ids=list(recipes.values_list('id', flat=True))
+    )
+
+    species_stats = {}
+    grade_stats = {}
+    total_recipes = recipes.count()
+    for recipe in recipes:
+        species_label = recipe.get_wood_species_display()
+        grade_label = recipe.get_target_grade_display()
+        if species_label not in species_stats:
+            species_stats[species_label] = {'count': 0}
+        species_stats[species_label]['count'] += 1
+        if grade_label not in grade_stats:
+            grade_stats[grade_label] = {'count': 0}
+        grade_stats[grade_label]['count'] += 1
+
+    for label, data in species_stats.items():
+        data['percentage'] = round(data['count'] / total_recipes * 100, 1) if total_recipes > 0 else 0
+    for label, data in grade_stats.items():
+        data['percentage'] = round(data['count'] / total_recipes * 100, 1) if total_recipes > 0 else 0
+
+    context = {
+        'comparison_data': comparison_data,
+        'species_filter': species_filter,
+        'grade_filter': grade_filter,
+        'wood_species_choices': FiringRecipe.WOOD_SPECIES,
+        'grade_choices': FiringRecipe.TARGET_GRADE,
+        'species_stats': species_stats,
+        'grade_stats': grade_stats,
+    }
+    return render(request, 'kiln_app/recipe_analysis.html', context)
+
+
+def batch_recipe_apply(request, batch_pk):
+    batch = get_object_or_404(Batch, pk=batch_pk)
+    if request.method == 'POST':
+        recipe_id = request.POST.get('recipe_id')
+        if recipe_id:
+            recipe = get_object_or_404(FiringRecipe, pk=recipe_id)
+            batch.recipe = recipe
+            batch.save()
+            messages.success(request, f'已套用配方：{recipe.name}')
+        return redirect('kiln_app:batch_detail', pk=batch.pk)
+
+    recipes = FiringRecipe.objects.filter(status='active').order_by('code')
+    current_recipe = batch.recipe
+    suggestions = suggest_recipe(
+        wood_species=batch.material_type if batch.material_type else None
+    )
+
+    context = {
+        'batch': batch,
+        'recipes': recipes,
+        'current_recipe': current_recipe,
+        'suggestions': suggestions,
+    }
+    return render(request, 'kiln_app/batch_recipe_apply.html', context)
+
+
+def batch_recipe_check(request, pk):
+    batch = get_object_or_404(Batch.objects.select_related('recipe'), pk=pk)
+    if not batch.recipe:
+        messages.warning(request, '该批次未套用配方，请先套用配方！')
+        return redirect('kiln_app:batch_recipe_apply', batch_pk=pk)
+
+    deviations = check_recipe_deviations(batch)
+    expected_stage = batch.expected_recipe_stage
+    progress_percent = batch.recipe_progress_percent
+
+    severe_count = sum(1 for d in deviations if d.deviation_level == 'severe')
+    moderate_count = sum(1 for d in deviations if d.deviation_level == 'moderate')
+    slight_count = sum(1 for d in deviations if d.deviation_level == 'slight')
+    has_severe = severe_count > 0
+    has_moderate = moderate_count > 0
+
+    deviation_history = RecipeDeviationRecord.objects.filter(
+        batch=batch
+    ).order_by('-record_time')[:50]
+
+    if request.method == 'POST':
+        saved = save_recipe_deviations(batch)
+        messages.success(request, f'已保存 {len(saved)} 条偏差记录')
+        return redirect('kiln_app:batch_detail', pk=pk)
+
+    context = {
+        'batch': batch,
+        'deviations': deviations,
+        'expected_stage': expected_stage,
+        'progress_percent': progress_percent,
+        'severe_count': severe_count,
+        'moderate_count': moderate_count,
+        'slight_count': slight_count,
+        'has_severe': has_severe,
+        'has_moderate': has_moderate,
+        'deviation_history': deviation_history,
+    }
+    return render(request, 'kiln_app/batch_recipe_check.html', context)
+

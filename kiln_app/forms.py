@@ -6,7 +6,8 @@ from .models import (
     SmokeStage, KilnRating, Supplier, RawMaterialBatch,
     MoistureTest, MaterialIssue, MaterialLoss, StockWarning,
     PurchasePlan, PurchaseOrder, PurchaseArrival, PurchaseCostSplit,
-    BatchCost, BatchCostItem, CostWarning, SupplierPriceHistory
+    BatchCost, BatchCostItem, CostWarning, SupplierPriceHistory,
+    FiringRecipe, RecipeStage, RecipeDeviationRecord
 )
 
 
@@ -40,7 +41,7 @@ class BatchForm(forms.ModelForm):
         fields = [
             'batch_no', 'kiln', 'material_type', 'material_weight',
             'charcoal_weight', 'ignition_date', 'finish_date',
-            'operator', 'notes'
+            'operator', 'recipe', 'notes'
         ]
         widgets = {
             'ignition_date': forms.DateTimeInput(
@@ -52,15 +53,19 @@ class BatchForm(forms.ModelForm):
                 format='%Y-%m-%dT%H:%M'
             ),
             'notes': forms.Textarea(attrs={'rows': 3, 'class': 'form-control'}),
+            'recipe': forms.Select(attrs={'class': 'form-select'}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         for field_name, field in self.fields.items():
-            if field_name not in ['ignition_date', 'finish_date', 'notes', 'kiln', 'material_type']:
+            if field_name not in ['ignition_date', 'finish_date', 'notes', 'kiln', 'material_type', 'recipe']:
                 field.widget.attrs['class'] = 'form-control'
-            elif field_name in ['kiln', 'material_type']:
+            elif field_name in ['kiln', 'material_type', 'recipe']:
                 field.widget.attrs['class'] = 'form-select'
+        self.fields['recipe'].queryset = FiringRecipe.objects.filter(status='active').order_by('code')
+        self.fields['recipe'].required = False
+        self.fields['recipe'].empty_label = '—— 不套用配方 ——'
         if self.instance and self.instance.pk:
             if self.instance.ignition_date:
                 local_ignition = timezone.localtime(self.instance.ignition_date)
@@ -831,3 +836,89 @@ class SupplierPriceHistoryForm(forms.ModelForm):
                 self.initial['quote_date'] = self.instance.quote_date.strftime('%Y-%m-%d')
             if self.instance.valid_until:
                 self.initial['valid_until'] = self.instance.valid_until.strftime('%Y-%m-%d')
+
+
+class FiringRecipeForm(forms.ModelForm):
+    class Meta:
+        model = FiringRecipe
+        fields = [
+            'code', 'name', 'wood_species', 'kiln_type', 'target_grade',
+            'target_yield_rate', 'total_duration_hours', 'ignition_duration_minutes',
+            'status', 'description', 'created_by', 'version'
+        ]
+        widgets = {
+            'wood_species': forms.Select(attrs={'class': 'form-select'}),
+            'target_grade': forms.Select(attrs={'class': 'form-select'}),
+            'status': forms.Select(attrs={'class': 'form-select'}),
+            'description': forms.Textarea(attrs={'rows': 4, 'class': 'form-control'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field_name, field in self.fields.items():
+            if field_name not in [
+                'wood_species', 'target_grade', 'status', 'description'
+            ]:
+                field.widget.attrs['class'] = 'form-control'
+
+    def clean_code(self):
+        code = self.cleaned_data.get('code')
+        if not code:
+            raise ValidationError('配方编号不能为空')
+        qs = FiringRecipe.objects.filter(code=code)
+        if self.instance and self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise ValidationError('该配方编号已存在，不能重复')
+        return code
+
+
+class RecipeStageForm(forms.ModelForm):
+    class Meta:
+        model = RecipeStage
+        fields = [
+            'stage_order', 'stage_name', 'duration_minutes',
+            'temp_min', 'temp_max', 'temp_target',
+            'damper_min', 'damper_max', 'damper_target',
+            'smoke_color', 'operation_points', 'notes'
+        ]
+        widgets = {
+            'stage_name': forms.Select(attrs={'class': 'form-select'}),
+            'smoke_color': forms.Select(attrs={'class': 'form-select'}),
+            'operation_points': forms.Textarea(attrs={'rows': 3, 'class': 'form-control'}),
+            'notes': forms.Textarea(attrs={'rows': 2, 'class': 'form-control'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        self.recipe = kwargs.pop('recipe', None)
+        super().__init__(*args, **kwargs)
+        for field_name, field in self.fields.items():
+            if field_name not in [
+                'stage_name', 'smoke_color', 'operation_points', 'notes'
+            ]:
+                field.widget.attrs['class'] = 'form-control'
+
+    def clean(self):
+        cleaned_data = super().clean()
+        temp_min = cleaned_data.get('temp_min')
+        temp_max = cleaned_data.get('temp_max')
+        if temp_min and temp_max and temp_min > temp_max:
+            self.add_error('temp_min', '最低温度不能高于最高温度')
+        damper_min = cleaned_data.get('damper_min')
+        damper_max = cleaned_data.get('damper_max')
+        if damper_min is not None and damper_max is not None and damper_min > damper_max:
+            self.add_error('damper_min', '风门最小开度不能大于最大开度')
+        return cleaned_data
+
+
+class RecipeDeviationResolveForm(forms.ModelForm):
+    class Meta:
+        model = RecipeDeviationRecord
+        fields = ['is_resolved', 'resolved_by', 'resolution_notes']
+        widgets = {
+            'resolution_notes': forms.Textarea(attrs={'rows': 3, 'class': 'form-control'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['resolved_by'].widget.attrs['class'] = 'form-control'

@@ -1,0 +1,185 @@
+{% extends 'base.html' %}
+
+{% block title %}烧制配方 - 炭窑作坊管理系统{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2><i class="bi bi-journal-text me-2"></i>烧制配方管理</h2>
+        <p class="text-muted mb-0">标准烧制工艺配方库，支持按树种、窑型、目标等级配置</p>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{% url 'kiln_app:recipe_create' %}" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i> 新建配方
+        </a>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <h5 class="card-title">总配方数</h5>
+                <h2 class="mb-0">{{ total_recipes }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <h5 class="card-title">启用配方</h5>
+                <h2 class="mb-0">{{ active_recipes }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <h5 class="card-title">平均阶段数</h5>
+                <h2 class="mb-0">6</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-dark">
+            <div class="card-body">
+                <h5 class="card-title">待优化</h5>
+                <h2 class="mb-0">{{ total_recipes|add:"-2" }}</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">配方状态</label>
+                <select name="status" class="form-select">
+                    <option value="">全部状态</option>
+                    {% for value, label in status_choices %}
+                    <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">适用树种</label>
+                <select name="wood_species" class="form-select">
+                    <option value="">全部树种</option>
+                    {% for value, label in wood_species_choices %}
+                    <option value="{{ value }}" {% if species_filter == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">目标等级</label>
+                <select name="target_grade" class="form-select">
+                    <option value="">全部等级</option>
+                    {% for value, label in grade_choices %}
+                    <option value="{{ value }}" {% if grade_filter == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <div class="input-group">
+                    <input type="text" name="search" class="form-control" placeholder="搜索配方名称/编号" value="{{ search }}">
+                    <button type="submit" class="btn btn-outline-primary">
+                        <i class="bi bi-search"></i>
+                    </button>
+                    <a href="{% url 'kiln_app:recipe_list' %}" class="btn btn-outline-secondary">
+                        <i class="bi bi-x-circle"></i>
+                    </a>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>配方编号</th>
+                        <th>配方名称</th>
+                        <th>适用树种</th>
+                        <th>目标等级</th>
+                        <th>阶段数</th>
+                        <th>总时长</th>
+                        <th>目标出炭率</th>
+                        <th>使用次数</th>
+                        <th>状态</th>
+                        <th>版本</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for recipe in recipes %}
+                    <tr>
+                        <td><code class="fw-bold">{{ recipe.code }}</code></td>
+                        <td>
+                            <a href="{% url 'kiln_app:recipe_detail' recipe.pk %}" class="text-decoration-none">
+                                {{ recipe.name }}
+                            </a>
+                        </td>
+                        <td>{{ recipe.get_wood_species_display }}</td>
+                        <td>
+                            <span class="badge bg-info">{{ recipe.get_target_grade_display }}</span>
+                        </td>
+                        <td>{{ recipe.stage_count }} 个</td>
+                        <td>
+                            {% if recipe.total_duration_hours %}
+                                {{ recipe.total_duration_hours }} 小时
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if recipe.target_yield_rate %}
+                                {{ recipe.target_yield_rate }}%
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>{{ recipe.usage_count }} 次</td>
+                        <td>
+                            {% if recipe.status == 'active' %}
+                                <span class="badge bg-success">启用</span>
+                            {% elif recipe.status == 'draft' %}
+                                <span class="badge bg-secondary">草稿</span>
+                            {% else %}
+                                <span class="badge bg-danger">已废弃</span>
+                            {% endif %}
+                        </td>
+                        <td><span class="text-muted small">v{{ recipe.version }}</span></td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <a href="{% url 'kiln_app:recipe_detail' recipe.pk %}" class="btn btn-outline-primary" title="详情">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                <a href="{% url 'kiln_app:recipe_edit' recipe.pk %}" class="btn btn-outline-secondary" title="编辑">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <a href="{% url 'kiln_app:recipe_delete' recipe.pk %}" class="btn btn-outline-danger" title="删除"
+                                   onclick="return confirm('确定要删除该配方吗？')">
+                                    <i class="bi bi-trash"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="11" class="text-center py-5 text-muted">
+                            <i class="bi bi-inbox display-4 d-block mb-3"></i>
+                            暂无配方数据
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

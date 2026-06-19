@@ -1,0 +1,186 @@
+{% extends 'base.html' %}
+
+{% block title %}配方偏差检测 - 批次管理{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'kiln_app:batch_list' %}">批次管理</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'kiln_app:batch_detail' batch.pk %}">{{ batch.batch_no }}</a></li>
+                <li class="breadcrumb-item active" aria-current="page">配方偏差检测</li>
+            </ol>
+        </nav>
+        <h2><i class="bi bi-clipboard-check me-2"></i>配方偏差实时检测</h2>
+        <p class="text-muted mb-0">批次 {{ batch.batch_no }}</p>
+    </div>
+</div>
+
+{% if not batch.recipe %}
+<div class="alert alert-warning">
+    <i class="bi bi-exclamation-triangle me-2"></i>
+    该批次尚未套用配方，请先
+    <a href="{% url 'kiln_app:batch_recipe_apply' batch.pk %}" class="alert-link">套用配方</a>
+</div>
+{% else %}
+
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body text-center">
+                <h6 class="text-muted">当前配方</h6>
+                <h5 class="mb-0">{{ batch.recipe.name }}</h5>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body text-center">
+                <h6 class="text-muted">当前阶段</h6>
+                <h5 class="mb-0">
+                    {% if expected_stage %}{{ expected_stage.get_stage_name_display }}{% else %}-{% endif %}
+                </h5>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body text-center">
+                <h6 class="text-muted">配方进度</h6>
+                <h5 class="mb-0">{{ progress_percent|default:"0" }}%</h5>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-thermometer-half me-2"></i>实时偏差检测结果</h5>
+    </div>
+    <div class="card-body">
+        {% if deviations %}
+            <div class="alert alert-{% if has_severe %}danger{% elif has_moderate %}warning{% else %}info{% endif %}">
+                <h6 class="alert-heading">
+                    <i class="bi {% if has_severe %}bi-exclamation-octagon{% elif has_moderate %}bi-exclamation-triangle{% else %}bi-info-circle{% endif %} me-2"></i>
+                    检测到 {{ deviations|length }} 项偏差
+                </h6>
+                <p class="mb-0">
+                    严重: <span class="text-danger">{{ severe_count }}</span> 项，
+                    中等: <span class="text-warning">{{ moderate_count }}</span> 项，
+                    轻微: <span class="text-info">{{ slight_count }}</span> 项
+                </p>
+            </div>
+
+            <div class="row">
+                {% for dev in deviations %}
+                <div class="col-md-6 mb-3">
+                    <div class="card border-{% if dev.deviation_level == 'severe' %}danger{% elif dev.deviation_level == 'moderate' %}warning{% else %}info{% endif %}">
+                        <div class="card-header bg-{% if dev.deviation_level == 'severe' %}danger{% elif dev.deviation_level == 'moderate' %}warning text-dark{% else %}info text-white{% endif %}">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0">
+                                    <i class="bi {% if dev.deviation_type == 'temperature' %}bi-thermometer-half{% elif dev.deviation_type == 'damper' %}bi-sliders{% else %}bi-cloud{% endif %} me-2"></i>
+                                    {{ dev.get_deviation_type_display }}
+                                </h6>
+                                <span class="badge {% if dev.deviation_level == 'severe' %}bg-light text-danger{% elif dev.deviation_level == 'moderate' %}bg-light text-warning{% else %}bg-light text-info{% endif %}">
+                                    {{ dev.get_deviation_level_display }}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <p class="mb-2"><strong>描述：</strong>{{ dev.description }}</p>
+                            <div class="row">
+                                <div class="col-4">
+                                    <p class="text-muted mb-1">标准值</p>
+                                    <h6 class="mb-0">{{ dev.standard_value|default:"-" }}</h6>
+                                </div>
+                                <div class="col-4">
+                                    <p class="text-muted mb-1">实际值</p>
+                                    <h6 class="mb-0">{{ dev.actual_value|default:"-" }}</h6>
+                                </div>
+                                <div class="col-4">
+                                    <p class="text-muted mb-1">偏差值</p>
+                                    <h6 class="mb-0 {% if dev.deviation_value and dev.deviation_value > 0 %}text-danger{% else %}text-warning{% endif %}">
+                                        {{ dev.deviation_value|default:"-" }}
+                                    </h6>
+                                </div>
+                            </div>
+                            {% if dev.suggestion %}
+                            <hr>
+                            <p class="mb-0 small">
+                                <i class="bi bi-lightbulb text-warning me-1"></i>
+                                <strong>建议：</strong>{{ dev.suggestion }}
+                            </p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="alert alert-success">
+                <i class="bi bi-check-circle me-2"></i>
+                当前各项指标均在标准范围内，无偏差！
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>历史偏差记录</h5>
+        <span class="badge bg-info">{{ batch.deviation_count }} 次</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>记录时间</th>
+                        <th>偏差类型</th>
+                        <th>偏差级别</th>
+                        <th>描述</th>
+                        <th>状态</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for dev in deviation_history %}
+                    <tr>
+                        <td>{{ dev.record_time|date:"Y-m-d H:i" }}</td>
+                        <td>{{ dev.get_deviation_type_display }}</td>
+                        <td>
+                            {% if dev.deviation_level == 'severe' %}
+                                <span class="badge bg-danger">严重</span>
+                            {% elif dev.deviation_level == 'moderate' %}
+                                <span class="badge bg-warning text-dark">中等</span>
+                            {% elif dev.deviation_level == 'slight' %}
+                                <span class="badge bg-info">轻微</span>
+                            {% else %}
+                                <span class="badge bg-success">正常</span>
+                            {% endif %}
+                        </td>
+                        <td><small>{{ dev.description|truncatechars:40 }}</small></td>
+                        <td>
+                            {% if dev.is_resolved %}
+                                <span class="badge bg-success">已处理</span>
+                            {% else %}
+                                <span class="badge bg-warning text-dark">待处理</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="text-center py-4 text-muted">
+                            暂无历史偏差记录
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% endif %}
+
+{% endblock %}

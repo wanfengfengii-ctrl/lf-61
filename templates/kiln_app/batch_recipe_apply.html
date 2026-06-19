@@ -1,0 +1,123 @@
+{% extends 'base.html' %}
+
+{% block title %}套用配方 - 批次管理{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'kiln_app:batch_list' %}">批次管理</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'kiln_app:batch_detail' batch.pk %}">{{ batch.batch_no }}</a></li>
+                <li class="breadcrumb-item active" aria-current="page">套用配方</li>
+            </ol>
+        </nav>
+        <h2><i class="bi bi-journal-plus me-2"></i>套用烧制配方</h2>
+        <p class="text-muted mb-0">批次 {{ batch.batch_no }} - {{ batch.get_material_type_display }}</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>批次信息</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <p class="text-muted mb-1">原料类型</p>
+                        <h6 class="mb-0">{{ batch.get_material_type_display }}</h6>
+                    </div>
+                    <div class="col-md-4">
+                        <p class="text-muted mb-1">原料重量</p>
+                        <h6 class="mb-0">{{ batch.material_weight }} kg</h6>
+                    </div>
+                    <div class="col-md-4">
+                        <p class="text-muted mb-1">点火日期</p>
+                        <h6 class="mb-0">{{ batch.ignition_date|date:"Y-m-d H:i" }}</h6>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% if current_recipe %}
+        <div class="card mb-4 border-warning">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0"><i class="bi bi-exclamation-triangle me-2"></i>当前已套用配方</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="mb-1">{{ current_recipe.name }}</h6>
+                        <small class="text-muted">
+                            {{ current_recipe.get_wood_species_display }} / {{ current_recipe.get_target_grade_display }}
+                        </small>
+                    </div>
+                    <a href="{% url 'kiln_app:recipe_detail' current_recipe.pk %}" class="btn btn-sm btn-outline-primary">
+                        查看配方
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-list-ul me-2"></i>选择配方</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>配方名称</th>
+                                <th>适用树种</th>
+                                <th>目标等级</th>
+                                <th>阶段数</th>
+                                <th>总时长</th>
+                                <th>目标出炭率</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for recipe in recipes %}
+                            <tr>
+                                <td>
+                                    <a href="{% url 'kiln_app:recipe_detail' recipe.pk %}" class="text-decoration-none">
+                                        <strong>{{ recipe.name }}</strong>
+                                    </a>
+                                    <br><small class="text-muted">{{ recipe.code }}</small>
+                                </td>
+                                <td>{{ recipe.get_wood_species_display }}</td>
+                                <td><span class="badge bg-info">{{ recipe.get_target_grade_display }}</span></td>
+                                <td>{{ recipe.stage_count }} 个</td>
+                                <td>{{ recipe.total_duration_hours|default:"-" }} 小时</td>
+                                <td>{{ recipe.target_yield_rate|default:"-" }}%</td>
+                                <td>
+                                    <form method="post" style="display: inline;">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="recipe_id" value="{{ recipe.pk }}">
+                                        <button type="submit" class="btn btn-sm btn-primary"
+                                                onclick="return confirm('确定套用该配方吗？')">
+                                            套用
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="7" class="text-center py-5 text-muted">
+                                    无可用配方
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

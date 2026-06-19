@@ -1,0 +1,170 @@
+{% extends 'base.html' %}
+
+{% block title %}配方分析对比 - 炭窑作坊管理系统{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2><i class="bi bi-bar-chart-line me-2"></i>配方分析对比</h2>
+        <p class="text-muted mb-0">多维度对比分析配方性能，持续优化作业标准</p>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label">适用树种</label>
+                <select name="wood_species" class="form-select">
+                    <option value="">全部树种</option>
+                    {% for value, label in wood_species_choices %}
+                    <option value="{{ value }}" {% if species_filter == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">目标等级</label>
+                <select name="target_grade" class="form-select">
+                    <option value="">全部等级</option>
+                    {% for value, label in grade_choices %}
+                    <option value="{{ value }}" {% if grade_filter == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4 d-flex align-items-end">
+                <button type="submit" class="btn btn-outline-primary me-2">
+                    <i class="bi bi-filter"></i> 筛选
+                </button>
+                <a href="{% url 'kiln_app:recipe_analysis' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-x-circle"></i> 重置
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-trophy me-2"></i>推荐配方排行</h5>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 50px;">排名</th>
+                        <th>配方名称</th>
+                        <th>适用树种</th>
+                        <th>目标等级</th>
+                        <th>完成批次</th>
+                        <th>平均出炭率</th>
+                        <th>平均评分</th>
+                        <th>严重偏差率</th>
+                        <th>推荐得分</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in comparison_data %}
+                    <tr>
+                        <td>
+                            {% if forloop.counter <= 3 %}
+                                <span class="badge bg-warning text-dark rounded-pill">{{ forloop.counter }}</span>
+                            {% else %}
+                                <span class="badge bg-secondary rounded-pill">{{ forloop.counter }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{% url 'kiln_app:recipe_detail' item.recipe.pk %}" class="text-decoration-none">
+                                {{ item.recipe.name }}
+                            </a>
+                        </td>
+                        <td>{{ item.recipe.get_wood_species_display }}</td>
+                        <td><span class="badge bg-info">{{ item.recipe.get_target_grade_display }}</span></td>
+                        <td>{{ item.completed_batches }} 次</td>
+                        <td>
+                            {% if item.avg_yield_rate %}
+                                {{ item.avg_yield_rate }}%
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>{{ item.avg_score|default:"-" }}</td>
+                        <td>
+                            {% if item.severe_deviation_rate %}
+                                <span class="{% if item.severe_deviation_rate > 10 %}text-danger{% elif item.severe_deviation_rate > 5 %}text-warning{% else %}text-success{% endif %}">
+                                    {{ item.severe_deviation_rate }}%
+                                </span>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="fw-bold {% if item.recommendation_score >= 80 %}text-success{% elif item.recommendation_score >= 60 %}text-info{% else %}text-muted{% endif %}">
+                                {{ item.recommendation_score|floatformat:1 }}
+                            </span>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="9" class="text-center py-5 text-muted">
+                            <i class="bi bi-bar-chart display-4 d-block mb-3"></i>
+                            暂无配方数据
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-fire me-2"></i>按树种统计</h5>
+            </div>
+            <div class="card-body">
+                {% for species, data in species_stats.items %}
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span>{{ species }}</span>
+                        <span class="text-muted small">{{ data.count }} 个配方</span>
+                    </div>
+                    <div class="progress" style="height: 8px;">
+                        <div class="progress-bar {% if forloop.counter == 1 %}bg-success{% elif forloop.counter == 2 %}bg-info{% else %}bg-secondary{% endif %}"
+                             style="width: {{ data.percentage }}%"></div>
+                    </div>
+                </div>
+                {% empty %}
+                <p class="text-muted text-center py-3">暂无数据</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-star me-2"></i>按等级统计</h5>
+            </div>
+            <div class="card-body">
+                {% for grade, data in grade_stats.items %}
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span>{{ grade }}</span>
+                        <span class="text-muted small">{{ data.count }} 个配方</span>
+                    </div>
+                    <div class="progress" style="height: 8px;">
+                        <div class="progress-bar {% if forloop.counter == 1 %}bg-warning{% elif forloop.counter == 2 %}bg-info{% else %}bg-secondary{% endif %}"
+                             style="width: {{ data.percentage }}%"></div>
+                    </div>
+                </div>
+                {% empty %}
+                <p class="text-muted text-center py-3">暂无数据</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

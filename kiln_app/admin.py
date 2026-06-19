@@ -3,7 +3,8 @@ from .models import (
     Kiln, Batch, TemperatureRecord, DamperRecord,
     SmokeStage, KilnRating, ProcessWarning,
     Supplier, RawMaterialBatch, MoistureTest,
-    StockLedger, MaterialIssue, MaterialLoss, StockWarning
+    StockLedger, MaterialIssue, MaterialLoss, StockWarning,
+    FiringRecipe, RecipeStage, RecipeDeviationRecord, RecipeStatistics
 )
 
 
@@ -310,3 +311,176 @@ class MoistureTestAdmin(admin.ModelAdmin):
     search_fields = ('material_batch__batch_no', 'tester')
     date_hierarchy = 'test_date'
     list_per_page = 50
+
+
+class RecipeStageInline(admin.TabularInline):
+    model = RecipeStage
+    extra = 0
+    fields = (
+        'stage_order', 'stage_name', 'duration_minutes',
+        'temp_min', 'temp_max', 'temp_target',
+        'damper_min', 'damper_max', 'damper_target',
+        'smoke_color', 'operation_points',
+    )
+    ordering = ['stage_order']
+
+
+class RecipeStatisticsInline(admin.StackedInline):
+    model = RecipeStatistics
+    can_delete = False
+    readonly_fields = (
+        'total_batches', 'completed_batches', 'avg_yield_rate',
+        'avg_duration_hours', 'total_deviations', 'severe_deviations',
+        'excellent_rate', 'good_rate', 'avg_total_score', 'last_calculated',
+    )
+    fieldsets = (
+        ('使用统计', {
+            'fields': (
+                ('total_batches', 'completed_batches'),
+                ('avg_yield_rate', 'avg_duration_hours'),
+            )
+        }),
+        ('偏差统计', {
+            'fields': (
+                ('total_deviations', 'severe_deviations'),
+            )
+        }),
+        ('质量统计', {
+            'fields': (
+                ('excellent_rate', 'good_rate'),
+                ('avg_total_score',),
+                ('last_calculated',),
+            )
+        }),
+    )
+
+
+@admin.register(FiringRecipe)
+class FiringRecipeAdmin(admin.ModelAdmin):
+    list_display = (
+        'code', 'name', 'wood_species_display', 'target_grade_display',
+        'stage_count', 'usage_count', 'status_display', 'version', 'created_at'
+    )
+    list_filter = ('status', 'wood_species', 'target_grade')
+    search_fields = ('code', 'name', 'description')
+    date_hierarchy = 'created_at'
+    list_per_page = 20
+    inlines = [RecipeStageInline, RecipeStatisticsInline]
+    prepopulated_fields = {'code': ('name',)}
+
+    def wood_species_display(self, obj):
+        return obj.get_wood_species_display()
+    wood_species_display.short_description = '适用树种'
+
+    def target_grade_display(self, obj):
+        return obj.get_target_grade_display()
+    target_grade_display.short_description = '目标等级'
+
+    def status_display(self, obj):
+        status_map = {
+            'draft': 'badge bg-secondary',
+            'active': 'badge bg-success',
+            'deprecated': 'badge bg-danger',
+        }
+        return f'<span class="badge {status_map.get(obj.status, "bg-secondary")}">{obj.get_status_display()}</span>'
+    status_display.short_description = '状态'
+    status_display.allow_tags = True
+
+    actions = ['activate_recipes', 'deprecate_recipes', 'calculate_stats']
+
+    def activate_recipes(self, request, queryset):
+        updated = queryset.update(status='active')
+        self.message_user(request, f'成功启用 {updated} 个配方')
+    activate_recipes.short_description = '启用选中的配方'
+
+    def deprecate_recipes(self, request, queryset):
+        updated = queryset.update(status='deprecated')
+        self.message_user(request, f'成功废弃 {updated} 个配方')
+    deprecate_recipes.short_description = '废弃选中的配方'
+
+    def calculate_stats(self, request, queryset):
+        from .services import calculate_recipe_statistics
+        count = 0
+        for recipe in queryset:
+            calculate_recipe_statistics(recipe)
+            count += 1
+        self.message_user(request, f'成功计算 {count} 个配方的统计数据')
+    calculate_stats.short_description = '计算配方统计数据'
+
+
+@admin.register(RecipeStage)
+class RecipeStageAdmin(admin.ModelAdmin):
+    list_display = (
+        'recipe', 'stage_order', 'stage_name_display',
+        'duration_minutes', 'temp_range', 'damper_range', 'smoke_color_display'
+    )
+    list_filter = ('stage_name', 'smoke_color')
+    search_fields = ('recipe__name', 'recipe__code', 'operation_points')
+    list_per_page = 30
+    ordering = ['recipe', 'stage_order']
+
+    def stage_name_display(self, obj):
+        return obj.get_stage_name_display()
+    stage_name_display.short_description = '阶段名称'
+
+    def temp_range(self, obj):
+        return f'{obj.temp_min} - {obj.temp_max}℃'
+    temp_range.short_description = '温度范围'
+
+    def damper_range(self, obj):
+        return f'{obj.damper_min} - {obj.damper_max}%'
+    damper_range.short_description = '风门范围'
+
+    def smoke_color_display(self, obj):
+        return obj.get_smoke_color_display() if obj.smoke_color else '-'
+    smoke_color_display.short_description = '烟色'
+
+
+@admin.register(RecipeDeviationRecord)
+class RecipeDeviationRecordAdmin(admin.ModelAdmin):
+    list_display = (
+        'batch', 'deviation_type_display', 'deviation_level_display',
+        'recipe_stage', 'standard_value', 'actual_value',
+        'deviation_percent', 'is_resolved', 'record_time'
+    )
+    list_filter = ('deviation_type', 'deviation_level', 'is_resolved')
+    search_fields = ('batch__batch_no', 'description', 'resolution_notes')
+    date_hierarchy = 'record_time'
+    list_per_page = 50
+    readonly_fields = ('created_at',)
+
+    def deviation_type_display(self, obj):
+        return obj.get_deviation_type_display()
+    deviation_type_display.short_description = '偏差类型'
+
+    def deviation_level_display(self, obj):
+        level_map = {
+            'normal': 'badge bg-success',
+            'slight': 'badge bg-info',
+            'moderate': 'badge bg-warning text-dark',
+            'severe': 'badge bg-danger',
+        }
+        return f'<span class="badge {level_map.get(obj.deviation_level, "bg-secondary")}">{obj.get_deviation_level_display()}</span>'
+    deviation_level_display.short_description = '偏差级别'
+    deviation_level_display.allow_tags = True
+
+
+@admin.register(RecipeStatistics)
+class RecipeStatisticsAdmin(admin.ModelAdmin):
+    list_display = (
+        'recipe', 'total_batches', 'completed_batches',
+        'avg_yield_rate', 'avg_duration_hours',
+        'total_deviations', 'severe_deviations',
+        'excellent_rate', 'good_rate', 'avg_total_score',
+        'last_calculated'
+    )
+    search_fields = ('recipe__name', 'recipe__code')
+    list_per_page = 30
+    readonly_fields = (
+        'recipe', 'total_batches', 'completed_batches', 'avg_yield_rate',
+        'avg_duration_hours', 'total_deviations', 'severe_deviations',
+        'excellent_rate', 'good_rate', 'avg_total_score', 'last_calculated',
+    )
+
+    def has_add_permission(self, request):
+        return False

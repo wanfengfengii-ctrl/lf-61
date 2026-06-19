@@ -49,6 +49,8 @@ class Batch(models.Model):
     finish_date = models.DateTimeField('出窑日期', null=True, blank=True)
     operator = models.CharField('操作人', max_length=50, blank=True)
     notes = models.TextField('备注', blank=True)
+    recipe = models.ForeignKey('FiringRecipe', on_delete=models.SET_NULL, verbose_name='套用配方', related_name='batches', null=True, blank=True)
+    current_recipe_stage = models.ForeignKey('RecipeStage', on_delete=models.SET_NULL, verbose_name='当前配方阶段', related_name='current_batches', null=True, blank=True)
     created_at = models.DateTimeField('创建时间', auto_now_add=True)
     updated_at = models.DateTimeField('更新时间', auto_now=True)
 
@@ -84,6 +86,39 @@ class Batch(models.Model):
     def detected_stage(self):
         from .services import detect_burning_stage
         return detect_burning_stage(self)
+
+    @property
+    def recipe_elapsed_minutes(self):
+        if not self.recipe or not self.ignition_date:
+            return None
+        now = self.finish_date or timezone.now()
+        delta = now - self.ignition_date
+        return round(delta.total_seconds() / 60, 2)
+
+    @property
+    def recipe_progress_percent(self):
+        if not self.recipe or not self.recipe.total_duration_hours:
+            return None
+        elapsed = self.recipe_elapsed_minutes
+        if elapsed is None:
+            return None
+        total_minutes = float(self.recipe.total_duration_hours) * 60
+        if total_minutes <= 0:
+            return None
+        return round(min(elapsed / total_minutes * 100, 100), 2)
+
+    @property
+    def expected_recipe_stage(self):
+        from .services import get_expected_recipe_stage
+        return get_expected_recipe_stage(self)
+
+    @property
+    def deviation_count(self):
+        return self.recipe_deviations.filter(is_resolved=False).count()
+
+    @property
+    def severe_deviation_count(self):
+        return self.recipe_deviations.filter(deviation_level='severe', is_resolved=False).count()
 
     def clean(self):
         super().clean()
@@ -1024,6 +1059,191 @@ class CostWarning(models.Model):
 
     def __str__(self):
         return f'{self.get_warning_type_display()} - {self.related_object_name}'
+
+
+class FiringRecipe(models.Model):
+    WOOD_SPECIES = RawMaterialBatch.WOOD_SPECIES
+    TARGET_GRADE = KilnRating.GRADE_CHOICES
+
+    RECIPE_STATUS = (
+        ('draft', '草稿'),
+        ('active', '启用'),
+        ('deprecated', '已废弃'),
+    )
+
+    name = models.CharField('配方名称', max_length=200)
+    code = models.CharField('配方编号', max_length=50, unique=True)
+    wood_species = models.CharField('适用树种', max_length=20, choices=WOOD_SPECIES)
+    kiln_type = models.CharField('适用窑型', max_length=100, blank=True)
+    target_grade = models.CharField('目标等级', max_length=20, choices=TARGET_GRADE, default='good')
+    target_yield_rate = models.DecimalField('目标出炭率(%)', max_digits=5, decimal_places=2, null=True, blank=True)
+    total_duration_hours = models.DecimalField('总烧制时长(小时)', max_digits=6, decimal_places=2, null=True, blank=True)
+    ignition_duration_minutes = models.IntegerField('点火时长(分钟)', default=30)
+    status = models.CharField('状态', max_length=20, choices=RECIPE_STATUS, default='draft')
+    description = models.TextField('配方说明', blank=True)
+    created_by = models.CharField('创建人', max_length=50, blank=True)
+    version = models.CharField('版本号', max_length=20, default='1.0')
+    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+    updated_at = models.DateTimeField('更新时间', auto_now=True)
+
+    class Meta:
+        verbose_name = '烧制配方'
+        verbose_name_plural = verbose_name
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.code} - {self.name}'
+
+    @property
+    def stage_count(self):
+        return self.stages.count()
+
+    @property
+    def total_stage_duration(self):
+        total = sum(stage.duration_minutes for stage in self.stages.all())
+        return round(total / 60, 2)
+
+    @property
+    def usage_count(self):
+        return self.batches.count()
+
+    def clean(self):
+        super().clean()
+        if self.target_yield_rate is not None:
+            if self.target_yield_rate < 0 or self.target_yield_rate > 100:
+                raise ValidationError({'target_yield_rate': '目标出炭率必须在0-100%范围内'})
+        if self.ignition_duration_minutes <= 0:
+            raise ValidationError({'ignition_duration_minutes': '点火时长必须大于0'})
+        if self.total_duration_hours is not None and self.total_duration_hours <= 0:
+            raise ValidationError({'total_duration_hours': '总烧制时长必须大于0'})
+
+
+class RecipeStage(models.Model):
+    STAGE_CHOICES = (
+        ('ignition', '点火期'),
+        ('drying', '干燥期'),
+        ('precarbonization', '预炭化期'),
+        ('carbonization', '炭化期'),
+        ('refining', '精炼期'),
+        ('cooling', '冷却期'),
+    )
+
+    SMOKE_COLOR_CHOICES = (
+        ('white', '白烟'),
+        ('yellow', '黄烟'),
+        ('green', '青烟'),
+        ('light', '淡烟'),
+        ('none', '无烟'),
+        ('black', '黑烟'),
+    )
+
+    recipe = models.ForeignKey(FiringRecipe, on_delete=models.CASCADE, verbose_name='所属配方', related_name='stages')
+    stage_order = models.IntegerField('阶段顺序')
+    stage_name = models.CharField('阶段名称', max_length=50, choices=STAGE_CHOICES)
+    duration_minutes = models.IntegerField('持续时长(分钟)')
+    temp_min = models.DecimalField('最低温度(℃)', max_digits=6, decimal_places=1)
+    temp_max = models.DecimalField('最高温度(℃)', max_digits=6, decimal_places=1)
+    temp_target = models.DecimalField('目标温度(℃)', max_digits=6, decimal_places=1, null=True, blank=True)
+    damper_min = models.IntegerField('风门最小开度(%)', default=0)
+    damper_max = models.IntegerField('风门最大开度(%)', default=100)
+    damper_target = models.IntegerField('风门目标开度(%)', null=True, blank=True)
+    smoke_color = models.CharField('烟色', max_length=20, choices=SMOKE_COLOR_CHOICES, blank=True)
+    operation_points = models.TextField('操作要点', blank=True)
+    notes = models.TextField('备注', blank=True)
+    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+
+    class Meta:
+        verbose_name = '配方阶段'
+        verbose_name_plural = verbose_name
+        ordering = ['recipe', 'stage_order']
+        unique_together = ('recipe', 'stage_order')
+
+    def __str__(self):
+        return f'{self.recipe.code} - 第{self.stage_order}阶段 {self.get_stage_name_display()}'
+
+    def clean(self):
+        super().clean()
+        if self.duration_minutes <= 0:
+            raise ValidationError({'duration_minutes': '持续时长必须大于0'})
+        if self.temp_min < 0 or self.temp_min > 1200:
+            raise ValidationError({'temp_min': '最低温度必须在0-1200℃范围内'})
+        if self.temp_max < 0 or self.temp_max > 1200:
+            raise ValidationError({'temp_max': '最高温度必须在0-1200℃范围内'})
+        if self.temp_min > self.temp_max:
+            raise ValidationError({'temp_min': '最低温度不能高于最高温度'})
+        if self.temp_target is not None:
+            if self.temp_target < self.temp_min or self.temp_target > self.temp_max:
+                raise ValidationError({'temp_target': '目标温度必须在温度范围内'})
+        if self.damper_min < 0 or self.damper_min > 100:
+            raise ValidationError({'damper_min': '风门最小开度必须在0-100%范围内'})
+        if self.damper_max < 0 or self.damper_max > 100:
+            raise ValidationError({'damper_max': '风门最大开度必须在0-100%范围内'})
+        if self.damper_min > self.damper_max:
+            raise ValidationError({'damper_min': '风门最小开度不能大于最大开度'})
+        if self.damper_target is not None:
+            if self.damper_target < self.damper_min or self.damper_target > self.damper_max:
+                raise ValidationError({'damper_target': '风门目标开度必须在开度范围内'})
+
+
+class RecipeDeviationRecord(models.Model):
+    DEVIATION_TYPE = (
+        ('temperature', '温度偏差'),
+        ('damper', '风门偏差'),
+        ('smoke', '烟色偏差'),
+        ('timing', '时间偏差'),
+    )
+
+    DEVIATION_LEVEL = (
+        ('normal', '正常'),
+        ('slight', '轻微偏差'),
+        ('moderate', '中等偏差'),
+        ('severe', '严重偏差'),
+    )
+
+    batch = models.ForeignKey(Batch, on_delete=models.CASCADE, verbose_name='所属批次', related_name='recipe_deviations')
+    recipe_stage = models.ForeignKey(RecipeStage, on_delete=models.SET_NULL, verbose_name='对应配方阶段', null=True, blank=True)
+    record_time = models.DateTimeField('记录时间', default=timezone.now)
+    deviation_type = models.CharField('偏差类型', max_length=20, choices=DEVIATION_TYPE)
+    deviation_level = models.CharField('偏差级别', max_length=20, choices=DEVIATION_LEVEL, default='normal')
+    standard_value = models.DecimalField('标准值', max_digits=10, decimal_places=2, null=True, blank=True)
+    actual_value = models.DecimalField('实际值', max_digits=10, decimal_places=2, null=True, blank=True)
+    deviation_value = models.DecimalField('偏差值', max_digits=10, decimal_places=2, null=True, blank=True)
+    deviation_percent = models.DecimalField('偏差率(%)', max_digits=8, decimal_places=2, null=True, blank=True)
+    description = models.TextField('偏差描述', blank=True)
+    is_resolved = models.BooleanField('是否已处理', default=False)
+    resolved_by = models.CharField('处理人', max_length=50, blank=True)
+    resolved_time = models.DateTimeField('处理时间', null=True, blank=True)
+    resolution_notes = models.TextField('处理说明', blank=True)
+    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+
+    class Meta:
+        verbose_name = '配方偏差记录'
+        verbose_name_plural = verbose_name
+        ordering = ['-record_time']
+
+    def __str__(self):
+        return f'{self.batch.batch_no} - {self.get_deviation_type_display()} [{self.get_deviation_level_display()}]'
+
+
+class RecipeStatistics(models.Model):
+    recipe = models.OneToOneField(FiringRecipe, on_delete=models.CASCADE, verbose_name='所属配方', related_name='statistics')
+    total_batches = models.IntegerField('总批次数', default=0)
+    completed_batches = models.IntegerField('完成批次数', default=0)
+    avg_yield_rate = models.DecimalField('平均出炭率(%)', max_digits=5, decimal_places=2, null=True, blank=True)
+    avg_duration_hours = models.DecimalField('平均烧制时长(小时)', max_digits=6, decimal_places=2, null=True, blank=True)
+    total_deviations = models.IntegerField('总偏差次数', default=0)
+    severe_deviations = models.IntegerField('严重偏差次数', default=0)
+    excellent_rate = models.DecimalField('特级品率(%)', max_digits=5, decimal_places=2, null=True, blank=True)
+    good_rate = models.DecimalField('一级品率(%)', max_digits=5, decimal_places=2, null=True, blank=True)
+    avg_total_score = models.DecimalField('平均综合评分', max_digits=5, decimal_places=2, null=True, blank=True)
+    last_calculated = models.DateTimeField('最后计算时间', auto_now=True)
+
+    class Meta:
+        verbose_name = '配方统计'
+        verbose_name_plural = verbose_name
+
+    def __str__(self):
+        return f'{self.recipe.code} - 统计数据'
 
 
 class SupplierPriceHistory(models.Model):

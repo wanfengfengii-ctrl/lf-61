@@ -131,4 +131,27 @@ urlpatterns = [
     path('export/purchase-csv/', views.export_purchase_csv, name='export_purchase_csv'),
     path('export/cost-csv/', views.export_cost_csv, name='export_cost_csv'),
     path('export/price-comparison-csv/', views.export_price_comparison_csv, name='export_price_comparison_csv'),
+
+    # 烧制配方管理
+    path('recipes/', views.recipe_list, name='recipe_list'),
+    path('recipes/create/', views.recipe_create, name='recipe_create'),
+    path('recipes/<int:pk>/', views.recipe_detail, name='recipe_detail'),
+    path('recipes/<int:pk>/edit/', views.recipe_edit, name='recipe_edit'),
+    path('recipes/<int:pk>/delete/', views.recipe_delete, name='recipe_delete'),
+
+    # 配方阶段管理
+    path('recipes/<int:recipe_pk>/stages/create/', views.recipe_stage_create, name='recipe_stage_create'),
+    path('recipe-stages/<int:pk>/edit/', views.recipe_stage_edit, name='recipe_stage_edit'),
+    path('recipe-stages/<int:pk>/delete/', views.recipe_stage_delete, name='recipe_stage_delete'),
+
+    # 配方偏差管理
+    path('recipe-deviations/', views.recipe_deviation_list, name='recipe_deviation_list'),
+    path('recipe-deviations/<int:pk>/resolve/', views.recipe_deviation_resolve, name='recipe_deviation_resolve'),
+
+    # 配方统计分析
+    path('recipe-analysis/', views.recipe_analysis, name='recipe_analysis'),
+
+    # 批次配方套用与检查
+    path('batches/<int:batch_pk>/recipe/apply/', views.batch_recipe_apply, name='batch_recipe_apply'),
+    path('batches/<int:pk>/recipe/check/', views.batch_recipe_check, name='batch_recipe_check'),
 ]

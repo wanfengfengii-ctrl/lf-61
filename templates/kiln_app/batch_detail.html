@@ -98,6 +98,34 @@
                         </p>
                     </div>
                 </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <p class="text-muted small mb-1">套用配方</p>
+                        <p class="mb-0 fw-bold">
+                            {% if batch.recipe %}
+                                <a href="{% url 'kiln_app:recipe_detail' batch.recipe.pk %}" class="text-decoration-none">
+                                    {{ batch.recipe.name }}
+                                </a>
+                                <span class="badge bg-info ms-1">{{ batch.recipe.get_target_grade_display }}</span>
+                            {% else %}
+                                <span class="text-muted">未套用</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <p class="text-muted small mb-1">配方进度</p>
+                        <p class="mb-0 fw-bold">
+                            {% if batch.recipe and batch.recipe_progress_percent %}
+                                {{ batch.recipe_progress_percent }}%
+                                {% if batch.current_recipe_stage %}
+                                    <small class="text-muted ms-1">({{ batch.current_recipe_stage.get_stage_name_display }})</small>
+                                {% endif %}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
                 {% if batch.notes %}
                     <div class="row">
                         <div class="col-md-12">
@@ -192,6 +220,31 @@
                     <i class="bi bi-cloud-fog2"></i> 记录烟色
                 </a>
             </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-journal-text me-2"></i>配方管理</h5>
+            </div>
+            <div class="card-body d-grid gap-2">
+                <a href="{% url 'kiln_app:batch_recipe_apply' batch.pk %}" class="btn btn-outline-primary">
+                    <i class="bi bi-journal-plus"></i> 套用配方
+                </a>
+                <a href="{% url 'kiln_app:batch_recipe_check' batch.pk %}" class="btn btn-outline-warning">
+                    <i class="bi bi-clipboard-check"></i> 偏差检测
+                    {% if batch.deviation_count and batch.deviation_count > 0 %}
+                        <span class="badge bg-danger ms-1">{{ batch.deviation_count }}</span>
+                    {% endif %}
+                </a>
+            </div>
+            {% if batch.recipe %}
+            <div class="card-footer bg-transparent">
+                <small class="text-muted">
+                    当前配方：<strong>{{ batch.recipe.name }}</strong>
+                    <br>偏差次数：<span class="{% if batch.severe_deviation_count and batch.severe_deviation_count > 0 %}text-danger{% else %}text-success{% endif %}">{{ batch.deviation_count|default:0 }} 次</span>
+                </small>
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>

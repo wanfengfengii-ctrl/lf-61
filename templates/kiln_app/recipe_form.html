@@ -1,0 +1,118 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if form.instance.pk %}编辑配方{% else %}新建配方{% endif %} - 烧制配方{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'kiln_app:recipe_list' %}">烧制配方</a></li>
+                <li class="breadcrumb-item active" aria-current="page">
+                    {% if form.instance.pk %}编辑配方{% else %}新建配方{% endif %}
+                </li>
+            </ol>
+        </nav>
+        <h2>
+            <i class="bi {% if form.instance.pk %}bi-pencil-square{% else %}bi-plus-circle{% endif %} me-2"></i>
+            {% if form.instance.pk %}编辑配方{% else %}新建配方{% endif %}
+        </h2>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card">
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    {% if form.errors %}
+                        <div class="alert alert-danger">
+                            <h6 class="alert-heading">请修正以下错误：</h6>
+                            {% for field in form %}
+                                {% for error in field.errors %}
+                                    <div>{{ field.label }}: {{ error }}</div>
+                                {% endfor %}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="{{ form.code.id_for_label }}" class="form-label">配方编号 <span class="text-danger">*</span></label>
+                            {{ form.code }}
+                            {% if form.code.help_text %}<div class="form-text">{{ form.code.help_text }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label for="{{ form.name.id_for_label }}" class="form-label">配方名称 <span class="text-danger">*</span></label>
+                            {{ form.name }}
+                            {% if form.name.help_text %}<div class="form-text">{{ form.name.help_text }}</div>{% endif %}
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label for="{{ form.wood_species.id_for_label }}" class="form-label">适用树种 <span class="text-danger">*</span></label>
+                            {{ form.wood_species }}
+                        </div>
+                        <div class="col-md-4">
+                            <label for="{{ form.kiln_type.id_for_label }}" class="form-label">适用窑型</label>
+                            {{ form.kiln_type }}
+                        </div>
+                        <div class="col-md-4">
+                            <label for="{{ form.target_grade.id_for_label }}" class="form-label">目标等级 <span class="text-danger">*</span></label>
+                            {{ form.target_grade }}
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label for="{{ form.ignition_duration_minutes.id_for_label }}" class="form-label">点火时长(分钟)</label>
+                            {{ form.ignition_duration_minutes }}
+                        </div>
+                        <div class="col-md-4">
+                            <label for="{{ form.total_duration_hours.id_for_label }}" class="form-label">总时长(小时)</label>
+                            {{ form.total_duration_hours }}
+                        </div>
+                        <div class="col-md-4">
+                            <label for="{{ form.target_yield_rate.id_for_label }}" class="form-label">目标出炭率(%)</label>
+                            {{ form.target_yield_rate }}
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label for="{{ form.status.id_for_label }}" class="form-label">状态</label>
+                            {{ form.status }}
+                        </div>
+                        <div class="col-md-4">
+                            <label for="{{ form.version.id_for_label }}" class="form-label">版本号</label>
+                            {{ form.version }}
+                        </div>
+                        <div class="col-md-4">
+                            <label for="{{ form.sort_order.id_for_label }}" class="form-label">排序</label>
+                            {{ form.sort_order }}
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="{{ form.description.id_for_label }}" class="form-label">配方说明</label>
+                        {{ form.description }}
+                    </div>
+
+                    <div class="d-flex justify-content-end">
+                        <a href="{% url 'kiln_app:recipe_list' %}" class="btn btn-outline-secondary me-2">
+                            <i class="bi bi-x-circle"></i> 取消
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-circle"></i>
+                            {% if form.instance.pk %}保存修改{% else %}创建配方{% endif %}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

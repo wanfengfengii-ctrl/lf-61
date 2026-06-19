@@ -1,0 +1,293 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ recipe.name }} - 配方详情{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'kiln_app:recipe_list' %}">烧制配方</a></li>
+                <li class="breadcrumb-item active" aria-current="page">{{ recipe.name }}</li>
+            </ol>
+        </nav>
+        <h2><i class="bi bi-journal-text me-2"></i>{{ recipe.name }}</h2>
+        <p class="text-muted mb-0">
+            <code>{{ recipe.code }}</code>
+            {% if recipe.status == 'active' %}
+                <span class="badge bg-success ms-2">启用</span>
+            {% elif recipe.status == 'draft' %}
+                <span class="badge bg-secondary ms-2">草稿</span>
+            {% else %}
+                <span class="badge bg-danger ms-2">已废弃</span>
+            {% endif %}
+            <span class="ms-2">v{{ recipe.version }}</span>
+        </p>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{% url 'kiln_app:recipe_edit' recipe.pk %}" class="btn btn-outline-primary me-2">
+            <i class="bi bi-pencil"></i> 编辑配方
+        </a>
+        <a href="{% url 'kiln_app:recipe_stage_create' recipe.pk %}" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i> 添加阶段
+        </a>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <h6 class="text-muted">适用树种</h6>
+                <h4 class="mb-0">{{ recipe.get_wood_species_display }}</h4>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <h6 class="text-muted">目标等级</h6>
+                <h4 class="mb-0">{{ recipe.get_target_grade_display }}</h4>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <h6 class="text-muted">总烧制时长</h6>
+                <h4 class="mb-0">{{ recipe.total_duration_hours|default:"-" }} 小时</h4>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <h6 class="text-muted">目标出炭率</h6>
+                <h4 class="mb-0">{{ recipe.target_yield_rate|default:"-" }}%</h4>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if recipe.description %}
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-file-text me-2"></i>配方说明</h5>
+    </div>
+    <div class="card-body">
+        <p class="mb-0">{{ recipe.description|linebreaks }}</p>
+    </div>
+</div>
+{% endif %}
+
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-list-ol me-2"></i>工艺阶段配置</h5>
+        <span class="badge bg-info">{{ stages|length }} 个阶段</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 60px;">序号</th>
+                        <th>阶段名称</th>
+                        <th>持续时长</th>
+                        <th>温度范围</th>
+                        <th>目标温度</th>
+                        <th>风门范围</th>
+                        <th>烟色</th>
+                        <th>操作要点</th>
+                        <th style="width: 120px;">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for stage in stages %}
+                    <tr>
+                        <td><span class="badge bg-secondary rounded-pill">{{ stage.stage_order }}</span></td>
+                        <td><strong>{{ stage.get_stage_name_display }}</strong></td>
+                        <td>{{ stage.duration_minutes }} 分钟</td>
+                        <td>{{ stage.temp_min }} - {{ stage.temp_max }} ℃</td>
+                        <td>{{ stage.temp_target|default:"-" }} ℃</td>
+                        <td>{{ stage.damper_min }} - {{ stage.damper_max }} %</td>
+                        <td>
+                            {% if stage.smoke_color %}
+                                <span class="badge" style="background-color: {% if stage.smoke_color == 'white' %}#f0f0f0;color:#333{% elif stage.smoke_color == 'yellow' %}#ffc107;color:#333{% elif stage.smoke_color == 'green' %}#28a745{% elif stage.smoke_color == 'light' %}#6c757d{% elif stage.smoke_color == 'black' %}#000{% else %}#6c757d{% endif %};">
+                                    {{ stage.get_smoke_color_display }}
+                                </span>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td><small class="text-muted">{{ stage.operation_points|default:"-"|truncatechars:30 }}</small></td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <a href="{% url 'kiln_app:recipe_stage_edit' stage.pk %}" class="btn btn-outline-primary" title="编辑">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <a href="{% url 'kiln_app:recipe_stage_delete' stage.pk %}" class="btn btn-outline-danger" title="删除"
+                                   onclick="return confirm('确定要删除该阶段吗？')">
+                                    <i class="bi bi-trash"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="9" class="text-center py-4 text-muted">
+                            暂无阶段配置
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-bar-chart me-2"></i>使用统计</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-6">
+                        <p class="text-muted mb-1">总批次数</p>
+                        <h4 class="mb-3">{{ stats.total_batches }}</h4>
+                    </div>
+                    <div class="col-6">
+                        <p class="text-muted mb-1">完成批次数</p>
+                        <h4 class="mb-3">{{ stats.completed_batches }}</h4>
+                    </div>
+                    <div class="col-6">
+                        <p class="text-muted mb-1">平均出炭率</p>
+                        <h4 class="mb-3">{{ stats.avg_yield_rate|default:"-" }}%</h4>
+                    </div>
+                    <div class="col-6">
+                        <p class="text-muted mb-1">平均烧制时长</p>
+                        <h4 class="mb-3">{{ stats.avg_duration_hours|default:"-" }}h</h4>
+                    </div>
+                    <div class="col-6">
+                        <p class="text-muted mb-1">特级品率</p>
+                        <h4 class="mb-3">{{ stats.excellent_rate|default:"-" }}%</h4>
+                    </div>
+                    <div class="col-6">
+                        <p class="text-muted mb-1">平均评分</p>
+                        <h4 class="mb-3">{{ stats.avg_total_score|default:"-" }}</h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-exclamation-triangle me-2"></i>偏差统计</h5>
+                <span class="badge {% if stats.severe_deviations > 0 %}bg-danger{% else %}bg-success{% endif %}">
+                    {{ stats.total_deviations }} 次
+                </span>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-6">
+                        <p class="text-muted mb-1">总偏差次数</p>
+                        <h4 class="mb-3">{{ stats.total_deviations }}</h4>
+                    </div>
+                    <div class="col-6">
+                        <p class="text-muted mb-1">严重偏差</p>
+                        <h4 class="mb-3 text-danger">{{ stats.severe_deviations }}</h4>
+                    </div>
+                </div>
+                {% if deviations %}
+                <hr>
+                <h6 class="mb-3">最近偏差记录</h6>
+                <div class="list-group list-group-flush">
+                    {% for dev in deviations|slice:":5" %}
+                    <div class="list-group-item px-0">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                {% if dev.deviation_level == 'severe' %}
+                                    <span class="badge bg-danger">严重</span>
+                                {% elif dev.deviation_level == 'moderate' %}
+                                    <span class="badge bg-warning text-dark">中等</span>
+                                {% elif dev.deviation_level == 'slight' %}
+                                    <span class="badge bg-info">轻微</span>
+                                {% else %}
+                                    <span class="badge bg-success">正常</span>
+                                {% endif %}
+                                <small class="text-muted ms-2">{{ dev.get_deviation_type_display }}</small>
+                            </div>
+                            <small class="text-muted">{{ dev.record_time|date:"m-d H:i" }}</small>
+                        </div>
+                        <p class="mb-0 mt-1 small">{{ dev.description|truncatechars:50 }}</p>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-box me-2"></i>关联批次 (最近20条)</h5>
+        <span class="badge bg-info">{{ stats.total_batches }} 个批次</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>批次编号</th>
+                        <th>点火日期</th>
+                        <th>原料重量</th>
+                        <th>成炭重量</th>
+                        <th>成炭率</th>
+                        <th>评级</th>
+                        <th>状态</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for batch in batches %}
+                    <tr>
+                        <td>
+                            <a href="{% url 'kiln_app:batch_detail' batch.pk %}" class="text-decoration-none">
+                                <code>{{ batch.batch_no }}</code>
+                            </a>
+                        </td>
+                        <td>{{ batch.ignition_date|date:"Y-m-d" }}</td>
+                        <td>{{ batch.material_weight }} kg</td>
+                        <td>{{ batch.charcoal_weight|default:"-" }} kg</td>
+                        <td>{{ batch.yield_rate|default:"-" }}%</td>
+                        <td>
+                            {% if batch.rating %}
+                                <span class="badge bg-info">{{ batch.rating.get_grade_display }}</span>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if batch.finish_date %}
+                                <span class="badge bg-success">已完成</span>
+                            {% else %}
+                                <span class="badge bg-warning text-dark">进行中</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center py-4 text-muted">
+                            暂无关联批次
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
