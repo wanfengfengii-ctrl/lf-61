@@ -591,3 +591,462 @@ class StockWarning(models.Model):
 
     def __str__(self):
         return f'{self.material_batch.batch_no} - {self.get_warning_type_display()}'
+
+
+class PurchasePlan(models.Model):
+    PLAN_STATUS = (
+        ('draft', '草稿'),
+        ('pending', '待审批'),
+        ('approved', '已批准'),
+        ('partial', '部分执行'),
+        ('completed', '已完成'),
+        ('cancelled', '已取消'),
+    )
+
+    plan_no = models.CharField('计划编号', max_length=50, unique=True)
+    plan_name = models.CharField('计划名称', max_length=200)
+    wood_species = models.CharField('木材种类', max_length=20, choices=RawMaterialBatch.WOOD_SPECIES)
+    total_weight = models.DecimalField('计划采购量(kg)', max_digits=12, decimal_places=2)
+    expected_price = models.DecimalField('预期单价(元/kg)', max_digits=8, decimal_places=2, null=True, blank=True)
+    total_budget = models.DecimalField('预算金额(元)', max_digits=12, decimal_places=2, null=True, blank=True)
+    required_date = models.DateField('需求日期')
+    supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, verbose_name='意向供应商', related_name='purchase_plans', null=True, blank=True)
+    status = models.CharField('状态', max_length=20, choices=PLAN_STATUS, default='draft')
+    applicant = models.CharField('申请人', max_length=50, blank=True)
+    approver = models.CharField('审批人', max_length=50, blank=True)
+    approval_date = models.DateField('审批日期', null=True, blank=True)
+    approval_notes = models.TextField('审批意见', blank=True)
+    description = models.TextField('采购说明', blank=True)
+    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+    updated_at = models.DateTimeField('更新时间', auto_now=True)
+
+    class Meta:
+        verbose_name = '采购计划'
+        verbose_name_plural = verbose_name
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.plan_no} - {self.plan_name}'
+
+    @property
+    def executed_weight(self):
+        return self.purchase_orders.filter(
+            status__in=['confirmed', 'partial', 'completed']
+        ).aggregate(total=Sum('ordered_weight'))['total'] or 0
+
+    @property
+    def execution_rate(self):
+        if self.total_weight > 0:
+            return round(float(self.executed_weight) / float(self.total_weight) * 100, 2)
+        return 0
+
+    @property
+    def arrival_weight(self):
+        return self.purchase_orders.aggregate(
+            total=Sum('arrivals__accepted_weight')
+        )['total'] or 0
+
+    def save(self, *args, **kwargs):
+        if self.total_weight and self.expected_price:
+            self.total_budget = round(float(self.total_weight) * float(self.expected_price), 2)
+        super().save(*args, **kwargs)
+
+    def clean(self):
+        super().clean()
+        if self.total_weight <= 0:
+            raise ValidationError({'total_weight': '计划采购量必须大于0'})
+        if self.expected_price is not None and self.expected_price < 0:
+            raise ValidationError({'expected_price': '预期单价不能为负数'})
+        if self.required_date and self.required_date < timezone.now().date():
+            if self.pk is None:
+                raise ValidationError({'required_date': '需求日期不能早于今天'})
+
+
+class PurchaseOrder(models.Model):
+    ORDER_STATUS = (
+        ('draft', '草稿'),
+        ('confirmed', '已确认'),
+        ('partial', '部分到货'),
+        ('completed', '全部到货'),
+        ('cancelled', '已取消'),
+    )
+
+    PAYMENT_TERMS = (
+        ('prepaid', '预付货款'),
+        ('delivery', '货到付款'),
+        ('credit', '月结30天'),
+        ('credit60', '月结60天'),
+        ('other', '其他'),
+    )
+
+    order_no = models.CharField('订单编号', max_length=50, unique=True)
+    purchase_plan = models.ForeignKey(PurchasePlan, on_delete=models.PROTECT, verbose_name='所属采购计划', related_name='purchase_orders', null=True, blank=True)
+    supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, verbose_name='供应商', related_name='purchase_orders')
+    wood_species = models.CharField('木材种类', max_length=20, choices=RawMaterialBatch.WOOD_SPECIES)
+    ordered_weight = models.DecimalField('订购重量(kg)', max_digits=12, decimal_places=2)
+    unit_price = models.DecimalField('单价(元/kg)', max_digits=8, decimal_places=2)
+    total_amount = models.DecimalField('订单金额(元)', max_digits=12, decimal_places=2, null=True, blank=True)
+    payment_terms = models.CharField('付款方式', max_length=20, choices=PAYMENT_TERMS, default='delivery')
+    expected_delivery_date = models.DateField('预计交货日期')
+    status = models.CharField('状态', max_length=20, choices=ORDER_STATUS, default='draft')
+    order_date = models.DateField('下单日期', default=timezone.now)
+    contact_person = models.CharField('供应商联系人', max_length=50, blank=True)
+    contact_phone = models.CharField('联系电话', max_length=20, blank=True)
+    buyer = models.CharField('采购员', max_length=50, blank=True)
+    notes = models.TextField('备注', blank=True)
+    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+    updated_at = models.DateTimeField('更新时间', auto_now=True)
+
+    class Meta:
+        verbose_name = '采购订单'
+        verbose_name_plural = verbose_name
+        ordering = ['-order_date']
+
+    def __str__(self):
+        return f'{self.order_no} - {self.supplier.name}'
+
+    @property
+    def arrived_weight(self):
+        return self.arrivals.aggregate(total=Sum('accepted_weight'))['total'] or 0
+
+    @property
+    def remaining_weight(self):
+        return float(self.ordered_weight) - float(self.arrived_weight)
+
+    @property
+    def arrival_rate(self):
+        if self.ordered_weight > 0:
+            return round(float(self.arrived_weight) / float(self.ordered_weight) * 100, 2)
+        return 0
+
+    def save(self, *args, **kwargs):
+        if self.ordered_weight and self.unit_price:
+            self.total_amount = round(float(self.ordered_weight) * float(self.unit_price), 2)
+        super().save(*args, **kwargs)
+
+    def clean(self):
+        super().clean()
+        if self.ordered_weight <= 0:
+            raise ValidationError({'ordered_weight': '订购重量必须大于0'})
+        if self.unit_price < 0:
+            raise ValidationError({'unit_price': '单价不能为负数'})
+        if self.expected_delivery_date and self.expected_delivery_date < self.order_date:
+            raise ValidationError({'expected_delivery_date': '预计交货日期不能早于下单日期'})
+
+
+class PurchaseArrival(models.Model):
+    INSPECTION_RESULT = (
+        ('qualified', '合格'),
+        ('partial', '部分合格'),
+        ('unqualified', '不合格'),
+    )
+
+    arrival_no = models.CharField('到货单号', max_length=50, unique=True)
+    purchase_order = models.ForeignKey(PurchaseOrder, on_delete=models.PROTECT, verbose_name='采购订单', related_name='arrivals')
+    arrival_date = models.DateTimeField('到货时间', default=timezone.now)
+    delivered_weight = models.DecimalField('送货重量(kg)', max_digits=12, decimal_places=2)
+    accepted_weight = models.DecimalField('验收重量(kg)', max_digits=12, decimal_places=2)
+    rejected_weight = models.DecimalField('拒收重量(kg)', max_digits=12, decimal_places=2, default=0)
+    moisture_content = models.DecimalField('实测含水率(%)', max_digits=5, decimal_places=2, null=True, blank=True)
+    inspection_result = models.CharField('检验结果', max_length=20, choices=INSPECTION_RESULT, default='qualified')
+    quality_grade = models.CharField('质量等级', max_length=20, choices=RawMaterialBatch.QUALITY_GRADE, null=True, blank=True)
+    inspector = models.CharField('检验员', max_length=50, blank=True)
+    inspection_notes = models.TextField('检验说明', blank=True)
+    supplier_delivery = models.CharField('送货人', max_length=50, blank=True)
+    vehicle_no = models.CharField('车牌号', max_length=20, blank=True)
+    warehouse_keeper = models.CharField('仓管员', max_length=50, blank=True)
+    material_batch = models.OneToOneField(RawMaterialBatch, on_delete=models.SET_NULL, verbose_name='关联原料批次', related_name='purchase_arrival', null=True, blank=True)
+    notes = models.TextField('备注', blank=True)
+    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+
+    class Meta:
+        verbose_name = '到货验收'
+        verbose_name_plural = verbose_name
+        ordering = ['-arrival_date']
+
+    def __str__(self):
+        return f'{self.arrival_no} - {self.purchase_order.order_no}'
+
+    @property
+    def weight_diff(self):
+        return float(self.delivered_weight) - float(self.accepted_weight) - float(self.rejected_weight)
+
+    def clean(self):
+        super().clean()
+        if self.delivered_weight <= 0:
+            raise ValidationError({'delivered_weight': '送货重量必须大于0'})
+        if self.accepted_weight < 0:
+            raise ValidationError({'accepted_weight': '验收重量不能为负数'})
+        if self.rejected_weight < 0:
+            raise ValidationError({'rejected_weight': '拒收重量不能为负数'})
+        if float(self.accepted_weight) + float(self.rejected_weight) > float(self.delivered_weight):
+            raise ValidationError({'accepted_weight': '验收重量+拒收重量不能超过送货重量'})
+        if self.moisture_content is not None and (self.moisture_content < 0 or self.moisture_content > 100):
+            raise ValidationError({'moisture_content': '含水率必须在0-100%范围内'})
+
+
+class PurchaseCostSplit(models.Model):
+    COST_TYPE = (
+        ('material', '原料成本'),
+        ('transport', '运输费用'),
+        ('loading', '装卸费用'),
+        ('insurance', '保险费用'),
+        ('tax', '税费'),
+        ('other', '其他费用'),
+    )
+
+    split_no = models.CharField('分摊单号', max_length=50, unique=True)
+    purchase_arrival = models.ForeignKey(PurchaseArrival, on_delete=models.CASCADE, verbose_name='到货单', related_name='cost_splits')
+    cost_type = models.CharField('费用类型', max_length=20, choices=COST_TYPE)
+    cost_amount = models.DecimalField('费用金额(元)', max_digits=10, decimal_places=2)
+    cost_description = models.CharField('费用说明', max_length=200, blank=True)
+    payee = models.CharField('收款方', max_length=200, blank=True)
+    invoice_no = models.CharField('发票号', max_length=50, blank=True)
+    is_allocated = models.BooleanField('是否已分摊', default=False)
+    allocated_date = models.DateTimeField('分摊时间', null=True, blank=True)
+    operator = models.CharField('操作人', max_length=50, blank=True)
+    notes = models.TextField('备注', blank=True)
+    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+
+    class Meta:
+        verbose_name = '采购费用分摊'
+        verbose_name_plural = verbose_name
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.split_no} - {self.get_cost_type_display()}'
+
+    @property
+    def unit_cost(self):
+        if self.purchase_arrival and self.purchase_arrival.accepted_weight > 0:
+            return round(float(self.cost_amount) / float(self.purchase_arrival.accepted_weight), 4)
+        return 0
+
+    def clean(self):
+        super().clean()
+        if self.cost_amount < 0:
+            raise ValidationError({'cost_amount': '费用金额不能为负数'})
+
+
+class StockCostLedger(models.Model):
+    COST_CHANGE_TYPE = (
+        ('purchase', '采购入库'),
+        ('adjust_up', '成本上调'),
+        ('adjust_down', '成本下调'),
+        ('revaluation', '库存重估'),
+        ('loss', '损耗分摊'),
+        ('other', '其他调整'),
+    )
+
+    material_batch = models.ForeignKey(RawMaterialBatch, on_delete=models.CASCADE, verbose_name='原料批次', related_name='cost_ledger_entries')
+    transaction_date = models.DateTimeField('交易时间', default=timezone.now)
+    change_type = models.CharField('变动类型', max_length=20, choices=COST_CHANGE_TYPE)
+    old_unit_cost = models.DecimalField('原单位成本(元/kg)', max_digits=10, decimal_places=4)
+    new_unit_cost = models.DecimalField('新单位成本(元/kg)', max_digits=10, decimal_places=4)
+    old_total_cost = models.DecimalField('原总成本(元)', max_digits=12, decimal_places=2)
+    new_total_cost = models.DecimalField('新总成本(元)', max_digits=12, decimal_places=2)
+    quantity = models.DecimalField('库存数量(kg)', max_digits=10, decimal_places=2)
+    reference_no = models.CharField('关联单号', max_length=50, blank=True)
+    operator = models.CharField('操作人', max_length=50, blank=True)
+    reason = models.TextField('变动原因', blank=True)
+    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+
+    class Meta:
+        verbose_name = '库存成本台账'
+        verbose_name_plural = verbose_name
+        ordering = ['-transaction_date']
+
+    def __str__(self):
+        return f'{self.material_batch.batch_no} - {self.get_change_type_display()}'
+
+    @property
+    def cost_change(self):
+        return float(self.new_total_cost) - float(self.old_total_cost)
+
+    @property
+    def unit_change(self):
+        return float(self.new_unit_cost) - float(self.old_unit_cost)
+
+
+class BatchCost(models.Model):
+    COST_ITEM_TYPE = (
+        ('material', '原料成本'),
+        ('labor', '人工成本'),
+        ('fuel', '燃料成本'),
+        ('electricity', '电力成本'),
+        ('depreciation', '设备折旧'),
+        ('maintenance', '维护成本'),
+        ('other', '其他成本'),
+    )
+
+    cost_no = models.CharField('成本编号', max_length=50, unique=True)
+    batch = models.OneToOneField(Batch, on_delete=models.CASCADE, verbose_name='烧炭批次', related_name='cost')
+    calculate_date = models.DateTimeField('计算时间', default=timezone.now)
+
+    material_cost = models.DecimalField('原料成本(元)', max_digits=12, decimal_places=2, default=0)
+    labor_cost = models.DecimalField('人工成本(元)', max_digits=10, decimal_places=2, default=0)
+    fuel_cost = models.DecimalField('燃料成本(元)', max_digits=10, decimal_places=2, default=0)
+    electricity_cost = models.DecimalField('电力成本(元)', max_digits=10, decimal_places=2, default=0)
+    depreciation_cost = models.DecimalField('设备折旧(元)', max_digits=10, decimal_places=2, default=0)
+    maintenance_cost = models.DecimalField('维护成本(元)', max_digits=10, decimal_places=2, default=0)
+    other_cost = models.DecimalField('其他成本(元)', max_digits=10, decimal_places=2, default=0)
+
+    total_cost = models.DecimalField('总成本(元)', max_digits=12, decimal_places=2, null=True, blank=True)
+    unit_cost = models.DecimalField('单位成炭成本(元/kg)', max_digits=10, decimal_places=4, null=True, blank=True)
+
+    charcoal_weight = models.DecimalField('成炭重量(kg)', max_digits=10, decimal_places=2, null=True, blank=True)
+    yield_rate = models.DecimalField('成炭率(%)', max_digits=5, decimal_places=2, null=True, blank=True)
+
+    selling_price = models.DecimalField('销售单价(元/kg)', max_digits=8, decimal_places=2, null=True, blank=True)
+    sales_amount = models.DecimalField('销售收入(元)', max_digits=12, decimal_places=2, null=True, blank=True)
+    profit = models.DecimalField('利润(元)', max_digits=12, decimal_places=2, null=True, blank=True)
+    profit_rate = models.DecimalField('利润率(%)', max_digits=5, decimal_places=2, null=True, blank=True)
+
+    cost_detail = models.TextField('成本明细说明', blank=True)
+    operator = models.CharField('核算人', max_length=50, blank=True)
+    notes = models.TextField('备注', blank=True)
+    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+    updated_at = models.DateTimeField('更新时间', auto_now=True)
+
+    class Meta:
+        verbose_name = '批次成本核算'
+        verbose_name_plural = verbose_name
+        ordering = ['-calculate_date']
+
+    def __str__(self):
+        return f'{self.cost_no} - {self.batch.batch_no}'
+
+    def calculate_costs(self):
+        self.total_cost = round(
+            float(self.material_cost) + float(self.labor_cost) +
+            float(self.fuel_cost) + float(self.electricity_cost) +
+            float(self.depreciation_cost) + float(self.maintenance_cost) +
+            float(self.other_cost), 2
+        )
+
+        if self.batch.charcoal_weight:
+            self.charcoal_weight = self.batch.charcoal_weight
+        if self.batch.yield_rate:
+            self.yield_rate = self.batch.yield_rate
+
+        if self.charcoal_weight and self.charcoal_weight > 0 and self.total_cost:
+            self.unit_cost = round(float(self.total_cost) / float(self.charcoal_weight), 4)
+
+        if self.selling_price and self.charcoal_weight:
+            self.sales_amount = round(float(self.selling_price) * float(self.charcoal_weight), 2)
+
+        if self.sales_amount and self.total_cost:
+            self.profit = round(float(self.sales_amount) - float(self.total_cost), 2)
+            if float(self.sales_amount) > 0:
+                self.profit_rate = round(float(self.profit) / float(self.sales_amount) * 100, 2)
+
+    def save(self, *args, **kwargs):
+        self.calculate_costs()
+        super().save(*args, **kwargs)
+
+    def clean(self):
+        super().clean()
+        cost_fields = [
+            ('material_cost', self.material_cost),
+            ('labor_cost', self.labor_cost),
+            ('fuel_cost', self.fuel_cost),
+            ('electricity_cost', self.electricity_cost),
+            ('depreciation_cost', self.depreciation_cost),
+            ('maintenance_cost', self.maintenance_cost),
+            ('other_cost', self.other_cost),
+        ]
+        for field_name, value in cost_fields:
+            if value is not None and value < 0:
+                raise ValidationError({field_name: '成本金额不能为负数'})
+
+
+class BatchCostItem(models.Model):
+    batch_cost = models.ForeignKey(BatchCost, on_delete=models.CASCADE, verbose_name='批次成本', related_name='cost_items')
+    cost_type = models.CharField('成本项目类型', max_length=20, choices=BatchCost.COST_ITEM_TYPE)
+    item_name = models.CharField('成本项目名称', max_length=100)
+    amount = models.DecimalField('金额(元)', max_digits=10, decimal_places=2)
+    quantity = models.DecimalField('数量', max_digits=10, decimal_places=2, null=True, blank=True)
+    unit = models.CharField('单位', max_length=20, blank=True)
+    unit_price = models.DecimalField('单价(元)', max_digits=10, decimal_places=4, null=True, blank=True)
+    description = models.TextField('说明', blank=True)
+    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+
+    class Meta:
+        verbose_name = '批次成本明细'
+        verbose_name_plural = verbose_name
+        ordering = ['cost_type', 'created_at']
+
+    def __str__(self):
+        return f'{self.item_name} - {self.amount}元'
+
+    def clean(self):
+        super().clean()
+        if self.amount < 0:
+            raise ValidationError({'amount': '金额不能为负数'})
+
+
+class CostWarning(models.Model):
+    WARNING_LEVEL = (
+        ('info', '提示'),
+        ('warning', '警告'),
+        ('critical', '严重'),
+    )
+
+    WARNING_TYPE = (
+        ('price_increase', '采购价格上涨'),
+        ('cost_overrun', '成本超支'),
+        ('low_margin', '利润率偏低'),
+        ('abnormal_cost', '成本异常波动'),
+        ('negative_profit', '亏损预警'),
+        ('budget_overrun', '预算超支'),
+    )
+
+    warning_date = models.DateTimeField('预警时间', default=timezone.now)
+    warning_type = models.CharField('预警类型', max_length=30, choices=WARNING_TYPE)
+    warning_level = models.CharField('预警级别', max_length=20, choices=WARNING_LEVEL, default='warning')
+    related_object_type = models.CharField('关联对象类型', max_length=50)
+    related_object_id = models.IntegerField('关联对象ID')
+    related_object_name = models.CharField('关联对象名称', max_length=200)
+    current_value = models.DecimalField('当前值', max_digits=12, decimal_places=4, null=True, blank=True)
+    threshold_value = models.DecimalField('阈值', max_digits=12, decimal_places=4, null=True, blank=True)
+    deviation_percent = models.DecimalField('偏差率(%)', max_digits=8, decimal_places=2, null=True, blank=True)
+    message = models.TextField('预警信息')
+    is_resolved = models.BooleanField('是否已处理', default=False)
+    resolved_by = models.CharField('处理人', max_length=50, blank=True)
+    resolved_date = models.DateTimeField('处理时间', null=True, blank=True)
+    resolution_notes = models.TextField('处理说明', blank=True)
+    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+
+    class Meta:
+        verbose_name = '成本预警'
+        verbose_name_plural = verbose_name
+        ordering = ['-warning_date']
+
+    def __str__(self):
+        return f'{self.get_warning_type_display()} - {self.related_object_name}'
+
+
+class SupplierPriceHistory(models.Model):
+    supplier = models.ForeignKey(Supplier, on_delete=models.CASCADE, verbose_name='供应商', related_name='price_history')
+    wood_species = models.CharField('木材种类', max_length=20, choices=RawMaterialBatch.WOOD_SPECIES)
+    price = models.DecimalField('报价(元/kg)', max_digits=8, decimal_places=2)
+    quote_date = models.DateField('报价日期', default=timezone.now)
+    min_order_qty = models.DecimalField('最小订量(kg)', max_digits=10, decimal_places=2, null=True, blank=True)
+    valid_until = models.DateField('有效期至', null=True, blank=True)
+    quality_grade = models.CharField('质量等级', max_length=20, choices=RawMaterialBatch.QUALITY_GRADE, null=True, blank=True)
+    contact_person = models.CharField('联系人', max_length=50, blank=True)
+    notes = models.TextField('备注', blank=True)
+    created_at = models.DateTimeField('创建时间', auto_now_add=True)
+
+    class Meta:
+        verbose_name = '供应商价格历史'
+        verbose_name_plural = verbose_name
+        ordering = ['-quote_date']
+
+    def __str__(self):
+        return f'{self.supplier.name} - {self.get_wood_species_display()} - {self.price}元/kg'
+
+    def clean(self):
+        super().clean()
+        if self.price < 0:
+            raise ValidationError({'price': '报价不能为负数'})

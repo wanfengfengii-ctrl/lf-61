@@ -1,0 +1,190 @@
+{% extends 'base.html' %}
+
+{% block title %}处理成本预警 - {{ warning.warning_no }}{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2>
+            <i class="bi bi-check2-square me-2"></i>
+            处理成本预警：<code class="fs-4">{{ warning.warning_no }}</code>
+        </h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{% url 'kiln_app:cost_warning_list' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> 返回列表
+        </a>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-8">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>预警信息</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">预警类型</p>
+                        <p class="mb-0 fw-bold">{{ warning.get_warning_type_display }}</p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">预警级别</p>
+                        <p class="mb-0 fw-bold">
+                            {% if warning.warning_level == 'high' %}
+                                <span class="badge bg-danger">严重</span>
+                            {% elif warning.warning_level == 'medium' %}
+                                <span class="badge bg-warning text-dark">警告</span>
+                            {% else %}
+                                <span class="badge bg-info">提示</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">预警时间</p>
+                        <p class="mb-0 fw-bold">{{ warning.warning_date|date:"Y-m-d H:i" }}</p>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">当前值</p>
+                        <p class="mb-0 fw-bold text-{% if warning.warning_level == 'high' %}danger{% elif warning.warning_level == 'medium' %}warning{% else %}info{% endif %}">{{ warning.current_value }}</p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">阈值</p>
+                        <p class="mb-0 fw-bold">{{ warning.threshold_value }}</p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">关联对象</p>
+                        <p class="mb-0 fw-bold">
+                            {% if warning.related_batch %}
+                                <code>{{ warning.related_batch.batch_no }}</code>
+                            {% elif warning.related_supplier %}
+                                {{ warning.related_supplier.name }}
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-12 mb-3">
+                        <p class="text-muted small mb-1">预警信息</p>
+                        <p class="mb-0 fw-bold text-{% if warning.warning_level == 'high' %}danger{% elif warning.warning_level == 'medium' %}warning{% else %}info{% endif %}">{{ warning.message }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card border-warning">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0"><i class="bi bi-exclamation-triangle me-2"></i>处理意见</h5>
+            </div>
+            <div class="card-body">
+                <form method="post" novalidate>
+                    {% csrf_token %}
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            {% for error in form.non_field_errors %}
+                                <p class="mb-0"><i class="bi bi-exclamation-circle"></i> {{ error }}</p>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+
+                    <div class="mb-3">
+                        <label class="form-label">{{ form.resolution.label }} <span class="text-danger">*</span></label>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="resolution" id="resolve" value="resolved" checked>
+                                    <label class="form-check-label text-success fw-bold" for="resolve">
+                                        <i class="bi bi-check-circle-fill"></i> 标记为已处理
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="resolution" id="ignore" value="ignored">
+                                    <label class="form-check-label text-secondary fw-bold" for="ignore">
+                                        <i class="bi bi-x-circle-fill"></i> 忽略此预警
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        {% if form.resolution.errors %}
+                            <div class="invalid-feedback d-block">
+                                {% for error in form.resolution.errors %}{{ error }}{% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">{{ form.handle_notes.label }} <span class="text-danger">*</span></label>
+                        {{ form.handle_notes }}
+                        {% if form.handle_notes.errors %}
+                            <div class="invalid-feedback d-block">
+                                {% for error in form.handle_notes.errors %}{{ error }}{% endfor %}
+                            </div>
+                        {% endif %}
+                        <div class="form-text">请详细填写处理措施和说明</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">{{ form.handle_date.label }}</label>
+                        {{ form.handle_date }}
+                        {% if form.handle_date.errors %}
+                            <div class="invalid-feedback d-block">
+                                {% for error in form.handle_date.errors %}{{ error }}{% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-circle"></i> 提交处理
+                        </button>
+                        <a href="{% url 'kiln_app:cost_warning_list' %}" class="btn btn-secondary">取消</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>处理历史</h5>
+            </div>
+            <div class="card-body p-0">
+                <div style="max-height: 500px; overflow-y: auto;">
+                    {% for record in handle_history %}
+                    <div class="p-3 border-bottom">
+                        <div class="d-flex justify-content-between align-items-start mb-1">
+                            <strong class="small">
+                                {% if record.action == 'create' %}
+                                    <span class="text-warning">创建预警</span>
+                                {% elif record.action == 'resolve' %}
+                                    <span class="text-success">标记处理</span>
+                                {% elif record.action == 'ignore' %}
+                                    <span class="text-secondary">忽略预警</span>
+                                {% else %}
+                                    <span class="text-info">{{ record.get_action_display }}</span>
+                                {% endif %}
+                            </strong>
+                            <small class="text-muted">{{ record.created_at|date:"m-d H:i" }}</small>
+                        </div>
+                        <p class="mb-1 small">操作人：{{ record.operator|default:"-" }}</p>
+                        {% if record.notes %}
+                            <p class="mb-0 small text-muted">{{ record.notes }}</p>
+                        {% endif %}
+                    </div>
+                    {% empty %}
+                    <div class="text-center text-muted py-4 small">暂无处理记录</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

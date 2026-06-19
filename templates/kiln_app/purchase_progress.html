@@ -1,0 +1,361 @@
+{% extends 'base.html' %}
+
+{% block title %}采购执行进度 - 炭窑作坊管理系统{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2><i class="bi bi-list-check me-2 text-info"></i>采购执行进度仪表盘</h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{% url 'kiln_app:cost_analysis' %}" class="btn btn-outline-primary me-2">
+            <i class="bi bi-graph-up"></i> 成本分析
+        </a>
+        <a href="{% url 'kiln_app:batch_profit_analysis' %}" class="btn btn-outline-success me-2">
+            <i class="bi bi-piggy-bank"></i> 利润分析
+        </a>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-2">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">采购计划总数</p>
+                <h3 class="mb-0 text-primary">{{ plan_total }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">待审批计划</p>
+                <h3 class="mb-0 text-warning">{{ plan_pending }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">执行中计划</p>
+                <h3 class="mb-0 text-info">{{ plan_executing }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">采购订单总数</p>
+                <h3 class="mb-0 text-primary">{{ order_total }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">部分到货</p>
+                <h3 class="mb-0 text-warning">{{ order_partial }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">已完成订单</p>
+                <h3 class="mb-0 text-success">{{ order_completed }}</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-clipboard-data me-2"></i>采购计划执行进度</h5>
+                <span class="badge bg-primary">{{ executing_plans|length }} 个执行中</span>
+            </div>
+            <div class="card-body">
+                {% if executing_plans %}
+                    {% for plan in executing_plans %}
+                    <div class="mb-4 {% if not forloop.last %}border-bottom pb-4{% endif %}">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div>
+                                <strong><code>{{ plan.plan_no }}</code></strong>
+                                <small class="text-muted ms-2">{{ plan.supplier_name }}</small>
+                            </div>
+                            <span class="small text-muted">要求: {{ plan.require_date|date:"m-d" }}</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <small class="text-muted">
+                                {{ plan.wood_type_name }} · 计划{{ plan.plan_quantity }}吨
+                            </small>
+                            <small class="text-muted">
+                                已到货 {{ plan.arrived_quantity|default:0 }} / {{ plan.plan_quantity }} 吨
+                            </small>
+                        </div>
+                        <div class="progress" style="height: 24px;">
+                            <div class="progress-bar bg-{% if plan.progress_percentage >= 100 %}success{% elif plan.progress_percentage >= 50 %}info{% else %}warning{% endif %}"
+                                 role="progressbar"
+                                 style="width: {{ plan.progress_percentage }}%;"
+                                 aria-valuenow="{{ plan.progress_percentage }}"
+                                 aria-valuemin="0"
+                                 aria-valuemax="100">
+                                {{ plan.progress_percentage|floatformat:0 }}%
+                            </div>
+                        </div>
+                        {% if plan.is_overdue %}
+                        <div class="mt-2">
+                            <span class="badge bg-danger"><i class="bi bi-exclamation-triangle"></i> 已逾期</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-check-circle fs-1 text-success"></i>
+                        <p class="mt-2 mb-0">暂无执行中的采购计划</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-truck me-2"></i>订单到货进度</h5>
+                <span class="badge bg-info">{{ pending_orders|length }} 个进行中</span>
+            </div>
+            <div class="card-body">
+                {% if pending_orders %}
+                    {% for order in pending_orders %}
+                    <div class="mb-4 {% if not forloop.last %}border-bottom pb-4{% endif %}">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div>
+                                <strong><code>{{ order.order_no }}</code></strong>
+                                <small class="text-muted ms-2">{{ order.supplier_name }}</small>
+                            </div>
+                            <span class="small text-muted">下单: {{ order.order_date|date:"m-d" }}</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <small class="text-muted">
+                                {{ order.wood_type_name }} · 订购{{ order.order_quantity }}吨
+                            </small>
+                            <small class="text-muted">
+                                已到 {{ order.arrived_quantity|default:0 }} / {{ order.order_quantity }} 吨
+                            </small>
+                        </div>
+                        <div class="progress" style="height: 24px;">
+                            <div class="progress-bar bg-{% if order.arrival_progress >= 100 %}success{% elif order.arrival_progress >= 50 %}info{% else %}warning{% endif %}"
+                                 role="progressbar"
+                                 style="width: {{ order.arrival_progress }}%;"
+                                 aria-valuenow="{{ order.arrival_progress }}"
+                                 aria-valuemin="0"
+                                 aria-valuemax="100">
+                                {{ order.arrival_progress|floatformat:0 }}%
+                            </div>
+                        </div>
+                        <div class="mt-2">
+                            {% if order.status == 'pending' %}
+                                <span class="badge bg-secondary">待确认</span>
+                            {% elif order.status == 'confirmed' %}
+                                <span class="badge bg-info">已确认</span>
+                            {% elif order.status == 'partial' %}
+                                <span class="badge bg-warning text-dark">部分到货</span>
+                            {% elif order.status == 'completed' %}
+                                <span class="badge bg-success">已完成</span>
+                            {% endif %}
+                            {% if order.is_overdue %}
+                                <span class="badge bg-danger ms-1"><i class="bi bi-exclamation-triangle"></i> 已逾期</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-check-circle fs-1 text-success"></i>
+                        <p class="mt-2 mb-0">暂无进行中的采购订单</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-pie-chart me-2"></i>采购计划状态分布</h5>
+            </div>
+            <div class="card-body">
+                <div style="height: 300px;">
+                    <canvas id="planStatusChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-pie-chart me-2"></i>采购订单状态分布</h5>
+            </div>
+            <div class="card-body">
+                <div style="height: 300px;">
+                    <canvas id="orderStatusChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-calendar3 me-2"></i>月度采购统计</h5>
+    </div>
+    <div class="card-body">
+        <div style="height: 350px;">
+            <canvas id="monthlyChart"></canvas>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const planStatusLabels = {{ plan_status_labels_json|safe }};
+const planStatusData = {{ plan_status_data_json|safe }};
+const planStatusColors = [
+    'rgba(108, 117, 125, 0.8)',
+    'rgba(255, 193, 7, 0.8)',
+    'rgba(13, 110, 253, 0.8)',
+    'rgba(25, 135, 84, 0.8)',
+    'rgba(220, 53, 69, 0.8)',
+];
+
+new Chart(document.getElementById('planStatusChart'), {
+    type: 'doughnut',
+    data: {
+        labels: planStatusLabels,
+        datasets: [{
+            data: planStatusData,
+            backgroundColor: planStatusColors,
+            borderColor: planStatusColors.map(c => c.replace('0.8', '1')),
+            borderWidth: 2,
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { position: 'right' },
+            tooltip: {
+                callbacks: {
+                    label: function(ctx) {
+                        const value = ctx.raw;
+                        const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                        const percentage = ((value / total) * 100).toFixed(1);
+                        return `${ctx.label}: ${value}个 (${percentage}%)`;
+                    }
+                }
+            }
+        }
+    }
+});
+
+const orderStatusLabels = {{ order_status_labels_json|safe }};
+const orderStatusData = {{ order_status_data_json|safe }};
+const orderStatusColors = [
+    'rgba(108, 117, 125, 0.8)',
+    'rgba(13, 110, 253, 0.8)',
+    'rgba(255, 193, 7, 0.8)',
+    'rgba(25, 135, 84, 0.8)',
+    'rgba(220, 53, 69, 0.8)',
+];
+
+new Chart(document.getElementById('orderStatusChart'), {
+    type: 'doughnut',
+    data: {
+        labels: orderStatusLabels,
+        datasets: [{
+            data: orderStatusData,
+            backgroundColor: orderStatusColors,
+            borderColor: orderStatusColors.map(c => c.replace('0.8', '1')),
+            borderWidth: 2,
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { position: 'right' },
+            tooltip: {
+                callbacks: {
+                    label: function(ctx) {
+                        const value = ctx.raw;
+                        const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                        const percentage = ((value / total) * 100).toFixed(1);
+                        return `${ctx.label}: ${value}个 (${percentage}%)`;
+                    }
+                }
+            }
+        }
+    }
+});
+
+const monthlyLabels = {{ monthly_labels_json|safe }};
+const monthlyPlanData = {{ monthly_plan_data_json|safe }};
+const monthlyOrderData = {{ monthly_order_data_json|safe }};
+const monthlyArrivalData = {{ monthly_arrival_data_json|safe }};
+
+new Chart(document.getElementById('monthlyChart'), {
+    type: 'line',
+    data: {
+        labels: monthlyLabels,
+        datasets: [
+            {
+                label: '计划数量(吨)',
+                data: monthlyPlanData,
+                borderColor: 'rgba(13, 110, 253, 1)',
+                backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                fill: true,
+                tension: 0.3,
+                pointRadius: 4,
+                pointHoverRadius: 6,
+            },
+            {
+                label: '订购数量(吨)',
+                data: monthlyOrderData,
+                borderColor: 'rgba(255, 193, 7, 1)',
+                backgroundColor: 'rgba(255, 193, 7, 0.1)',
+                fill: true,
+                tension: 0.3,
+                pointRadius: 4,
+                pointHoverRadius: 6,
+            },
+            {
+                label: '到货数量(吨)',
+                data: monthlyArrivalData,
+                borderColor: 'rgba(25, 135, 84, 1)',
+                backgroundColor: 'rgba(25, 135, 84, 0.1)',
+                fill: true,
+                tension: 0.3,
+                pointRadius: 4,
+                pointHoverRadius: 6,
+            }
+        ]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { position: 'top' }
+        },
+        scales: {
+            x: { title: { display: true, text: '月份' } },
+            y: { title: { display: true, text: '数量 (吨)' }, beginAtZero: true }
+        }
+    }
+});
+</script>
+{% endblock %}

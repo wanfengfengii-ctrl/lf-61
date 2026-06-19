@@ -12,13 +12,18 @@ from .models import (
     Kiln, Batch, TemperatureRecord, DamperRecord,
     SmokeStage, KilnRating, ProcessWarning,
     Supplier, RawMaterialBatch, MoistureTest,
-    StockLedger, MaterialIssue, MaterialLoss, StockWarning
+    StockLedger, MaterialIssue, MaterialLoss, StockWarning,
+    PurchasePlan, PurchaseOrder, PurchaseArrival, PurchaseCostSplit,
+    BatchCost, BatchCostItem, CostWarning, SupplierPriceHistory, StockCostLedger
 )
 from .forms import (
     KilnForm, BatchForm, TemperatureRecordForm,
     DamperRecordForm, SmokeStageForm, KilnRatingForm,
     SupplierForm, RawMaterialBatchForm, MoistureTestForm,
-    MaterialIssueForm, MaterialLossForm, StockWarningResolveForm
+    MaterialIssueForm, MaterialLossForm, StockWarningResolveForm,
+    PurchasePlanForm, PurchasePlanApprovalForm, PurchaseOrderForm,
+    PurchaseArrivalForm, PurchaseCostSplitForm, BatchCostForm, BatchCostItemForm,
+    CostWarningResolveForm, SupplierPriceHistoryForm
 )
 from .services import generate_warnings, detect_burning_stage
 
@@ -1643,5 +1648,1374 @@ def export_material_csv(request):
                 mb.total_cost or '',
                 mb.storage_location or '',
             ])
+
+    return response
+
+
+def purchase_plan_list(request):
+    plans = PurchasePlan.objects.select_related('supplier').all()
+    status_filter = request.GET.get('status', '')
+    supplier_filter = request.GET.get('supplier', '')
+    species_filter = request.GET.get('wood_species', '')
+
+    if status_filter:
+        plans = plans.filter(status=status_filter)
+    if supplier_filter:
+        plans = plans.filter(supplier_id=supplier_filter)
+    if species_filter:
+        plans = plans.filter(wood_species=species_filter)
+
+    suppliers = Supplier.objects.all()
+
+    context = {
+        'plans': plans,
+        'status_filter': status_filter,
+        'supplier_filter': supplier_filter,
+        'species_filter': species_filter,
+        'suppliers': suppliers,
+        'wood_species_choices': RawMaterialBatch.WOOD_SPECIES,
+        'plan_status_choices': PurchasePlan.PLAN_STATUS,
+    }
+    return render(request, 'kiln_app/purchase_plan_list.html', context)
+
+
+def purchase_plan_create(request):
+    if request.method == 'POST':
+        form = PurchasePlanForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, '采购计划创建成功！')
+            return redirect('kiln_app:purchase_plan_list')
+    else:
+        form = PurchasePlanForm()
+    return render(request, 'kiln_app/purchase_plan_form.html', {'form': form, 'action': '创建'})
+
+
+def purchase_plan_edit(request, pk):
+    plan = get_object_or_404(PurchasePlan, pk=pk)
+    if request.method == 'POST':
+        form = PurchasePlanForm(request.POST, instance=plan)
+        if form.is_valid():
+            form.save()
+            messages.success(request, '采购计划更新成功！')
+            return redirect('kiln_app:purchase_plan_detail', pk=plan.pk)
+    else:
+        form = PurchasePlanForm(instance=plan)
+    return render(request, 'kiln_app/purchase_plan_form.html', {'form': form, 'action': '编辑', 'plan': plan})
+
+
+def purchase_plan_delete(request, pk):
+    plan = get_object_or_404(PurchasePlan, pk=pk)
+    try:
+        plan.delete()
+        messages.success(request, '采购计划已删除！')
+    except Exception:
+        messages.error(request, '该采购计划有关联的采购订单，无法删除！')
+    return redirect('kiln_app:purchase_plan_list')
+
+
+def purchase_plan_detail(request, pk):
+    plan = get_object_or_404(PurchasePlan.objects.select_related('supplier'), pk=pk)
+    orders = plan.purchase_orders.select_related('supplier').all()
+    total_ordered = orders.aggregate(total=Sum('ordered_weight'))['total'] or 0
+    total_arrived = orders.aggregate(total=Sum('arrivals__accepted_weight'))['total'] or 0
+
+    context = {
+        'plan': plan,
+        'orders': orders,
+        'total_ordered': total_ordered,
+        'total_arrived': total_arrived,
+    }
+    return render(request, 'kiln_app/purchase_plan_detail.html', context)
+
+
+def purchase_plan_approve(request, pk):
+    plan = get_object_or_404(PurchasePlan, pk=pk)
+    if request.method == 'POST':
+        form = PurchasePlanApprovalForm(request.POST, instance=plan)
+        if form.is_valid():
+            plan = form.save(commit=False)
+            if plan.status in ['approved', 'rejected'] and not plan.approval_date:
+                plan.approval_date = timezone.now().date()
+            plan.save()
+            if plan.status == 'approved':
+                messages.success(request, '采购计划已批准！')
+            else:
+                messages.success(request, '采购计划审批完成！')
+            return redirect('kiln_app:purchase_plan_detail', pk=plan.pk)
+    else:
+        form = PurchasePlanApprovalForm(instance=plan)
+    return render(request, 'kiln_app/purchase_plan_approve.html', {'form': form, 'plan': plan})
+
+
+def purchase_order_list(request):
+    orders = PurchaseOrder.objects.select_related('supplier', 'purchase_plan').all()
+    status_filter = request.GET.get('status', '')
+    supplier_filter = request.GET.get('supplier', '')
+
+    if status_filter:
+        orders = orders.filter(status=status_filter)
+    if supplier_filter:
+        orders = orders.filter(supplier_id=supplier_filter)
+
+    suppliers = Supplier.objects.all()
+
+    context = {
+        'orders': orders,
+        'status_filter': status_filter,
+        'supplier_filter': supplier_filter,
+        'suppliers': suppliers,
+        'order_status_choices': PurchaseOrder.ORDER_STATUS,
+    }
+    return render(request, 'kiln_app/purchase_order_list.html', context)
+
+
+def purchase_order_create(request):
+    if request.method == 'POST':
+        form = PurchaseOrderForm(request.POST)
+        if form.is_valid():
+            order = form.save()
+            if order.purchase_plan:
+                plan = order.purchase_plan
+                if plan.status == 'approved':
+                    if plan.executed_weight >= plan.total_weight:
+                        plan.status = 'completed'
+                    elif plan.executed_weight > 0:
+                        plan.status = 'partial'
+                    plan.save()
+            messages.success(request, '采购订单创建成功！')
+            return redirect('kiln_app:purchase_order_list')
+    else:
+        form = PurchaseOrderForm()
+    return render(request, 'kiln_app/purchase_order_form.html', {'form': form, 'action': '创建'})
+
+
+def purchase_order_edit(request, pk):
+    order = get_object_or_404(PurchaseOrder.objects.select_related('supplier', 'purchase_plan'), pk=pk)
+    if request.method == 'POST':
+        form = PurchaseOrderForm(request.POST, instance=order)
+        if form.is_valid():
+            form.save()
+            messages.success(request, '采购订单更新成功！')
+            return redirect('kiln_app:purchase_order_detail', pk=order.pk)
+    else:
+        form = PurchaseOrderForm(instance=order)
+    return render(request, 'kiln_app/purchase_order_form.html', {'form': form, 'action': '编辑', 'order': order})
+
+
+def purchase_order_delete(request, pk):
+    order = get_object_or_404(PurchaseOrder, pk=pk)
+    try:
+        order.delete()
+        messages.success(request, '采购订单已删除！')
+    except Exception:
+        messages.error(request, '该采购订单有关联的到货记录，无法删除！')
+    return redirect('kiln_app:purchase_order_list')
+
+
+def purchase_order_detail(request, pk):
+    order = get_object_or_404(PurchaseOrder.objects.select_related('supplier', 'purchase_plan'), pk=pk)
+    arrivals = order.arrivals.all()
+    total_arrived = arrivals.aggregate(total=Sum('accepted_weight'))['total'] or 0
+
+    context = {
+        'order': order,
+        'arrivals': arrivals,
+        'total_arrived': total_arrived,
+    }
+    return render(request, 'kiln_app/purchase_order_detail.html', context)
+
+
+def purchase_arrival_list(request):
+    arrivals = PurchaseArrival.objects.select_related('purchase_order__supplier').all()
+    result_filter = request.GET.get('inspection_result', '')
+
+    if result_filter:
+        arrivals = arrivals.filter(inspection_result=result_filter)
+
+    context = {
+        'arrivals': arrivals,
+        'result_filter': result_filter,
+        'inspection_results': PurchaseArrival.INSPECTION_RESULT,
+    }
+    return render(request, 'kiln_app/purchase_arrival_list.html', context)
+
+
+def purchase_arrival_create(request):
+    if request.method == 'POST':
+        form = PurchaseArrivalForm(request.POST)
+        if form.is_valid():
+            arrival = form.save()
+            if arrival.inspection_result in ['qualified', 'partial'] and arrival.accepted_weight > 0:
+                order = arrival.purchase_order
+                material_batch = RawMaterialBatch.objects.create(
+                    batch_no=f'RM-{arrival.arrival_no}',
+                    supplier=order.supplier,
+                    wood_species=order.wood_species,
+                    arrival_date=arrival.arrival_date.date(),
+                    total_weight=arrival.accepted_weight,
+                    moisture_content=arrival.moisture_content,
+                    quality_grade=arrival.quality_grade,
+                    inspection_notes=arrival.inspection_notes,
+                    inspector=arrival.inspector,
+                    inspection_date=arrival.arrival_date.date(),
+                    unit_price=order.unit_price,
+                    remarks=f'来源采购订单: {order.order_no}',
+                )
+                arrival.material_batch = material_batch
+                arrival.save()
+
+                StockLedger.objects.create(
+                    material_batch=material_batch,
+                    transaction_type='stock_in',
+                    transaction_date=arrival.arrival_date,
+                    quantity=arrival.accepted_weight,
+                    balance_after=arrival.accepted_weight,
+                    reference_no=arrival.arrival_no,
+                    operator=arrival.warehouse_keeper,
+                    notes=f'采购到货入库，来源订单: {order.order_no}',
+                )
+
+                if order.remaining_weight <= 0:
+                    order.status = 'completed'
+                elif order.arrival_rate > 0:
+                    order.status = 'partial'
+                order.save()
+
+                if order.purchase_plan:
+                    plan = order.purchase_plan
+                    if plan.execution_rate >= 100:
+                        plan.status = 'completed'
+                    elif plan.execution_rate > 0:
+                        plan.status = 'partial'
+                    plan.save()
+
+            messages.success(request, '到货验收单创建成功！')
+            return redirect('kiln_app:purchase_arrival_list')
+    else:
+        form = PurchaseArrivalForm()
+    return render(request, 'kiln_app/purchase_arrival_form.html', {'form': form, 'action': '创建'})
+
+
+def purchase_arrival_edit(request, pk):
+    arrival = get_object_or_404(PurchaseArrival.objects.select_related('purchase_order__supplier'), pk=pk)
+    if request.method == 'POST':
+        form = PurchaseArrivalForm(request.POST, instance=arrival)
+        if form.is_valid():
+            form.save()
+            messages.success(request, '到货验收单更新成功！')
+            return redirect('kiln_app:purchase_arrival_detail', pk=arrival.pk)
+    else:
+        form = PurchaseArrivalForm(instance=arrival)
+    return render(request, 'kiln_app/purchase_arrival_form.html', {'form': form, 'action': '编辑', 'arrival': arrival})
+
+
+def purchase_arrival_delete(request, pk):
+    arrival = get_object_or_404(PurchaseArrival, pk=pk)
+    try:
+        if arrival.material_batch:
+            arrival.material_batch.delete()
+        arrival.delete()
+        messages.success(request, '到货验收单已删除！')
+    except Exception as e:
+        messages.error(request, f'删除失败：{str(e)}')
+    return redirect('kiln_app:purchase_arrival_list')
+
+
+def purchase_arrival_detail(request, pk):
+    arrival = get_object_or_404(PurchaseArrival.objects.select_related(
+        'purchase_order__supplier', 'purchase_order__purchase_plan', 'material_batch'
+    ), pk=pk)
+    cost_splits = arrival.cost_splits.all()
+    total_cost = cost_splits.aggregate(total=Sum('cost_amount'))['total'] or 0
+
+    context = {
+        'arrival': arrival,
+        'cost_splits': cost_splits,
+        'total_cost': total_cost,
+    }
+    return render(request, 'kiln_app/purchase_arrival_detail.html', context)
+
+
+def cost_split_list(request):
+    splits = PurchaseCostSplit.objects.select_related('purchase_arrival__purchase_order__supplier').all()
+    type_filter = request.GET.get('cost_type', '')
+
+    if type_filter:
+        splits = splits.filter(cost_type=type_filter)
+
+    context = {
+        'splits': splits,
+        'type_filter': type_filter,
+        'cost_types': PurchaseCostSplit.COST_TYPE,
+    }
+    return render(request, 'kiln_app/cost_split_list.html', context)
+
+
+def cost_split_create(request):
+    if request.method == 'POST':
+        form = PurchaseCostSplitForm(request.POST)
+        if form.is_valid():
+            split = form.save()
+            if split.purchase_arrival and split.purchase_arrival.material_batch:
+                mb = split.purchase_arrival.material_batch
+                old_unit_cost = mb.unit_price or 0
+                old_total_cost = mb.total_cost or 0
+                new_total_cost = float(old_total_cost) + float(split.cost_amount)
+                new_unit_cost = round(new_total_cost / float(mb.total_weight), 4) if mb.total_weight > 0 else 0
+
+                StockCostLedger.objects.create(
+                    material_batch=mb,
+                    transaction_date=timezone.now(),
+                    change_type='purchase',
+                    old_unit_cost=old_unit_cost,
+                    new_unit_cost=new_unit_cost,
+                    old_total_cost=old_total_cost,
+                    new_total_cost=new_total_cost,
+                    quantity=mb.total_weight,
+                    reference_no=split.split_no,
+                    operator=split.operator,
+                    reason=f'{split.get_cost_type_display()}分摊',
+                )
+
+                mb.unit_price = new_unit_cost
+                mb.total_cost = new_total_cost
+                mb.save()
+
+                split.is_allocated = True
+                split.allocated_date = timezone.now()
+                split.save()
+
+            messages.success(request, '费用分摊创建成功！')
+            return redirect('kiln_app:cost_split_list')
+    else:
+        form = PurchaseCostSplitForm()
+    return render(request, 'kiln_app/cost_split_form.html', {'form': form, 'action': '创建'})
+
+
+def cost_split_edit(request, pk):
+    split = get_object_or_404(PurchaseCostSplit.objects.select_related('purchase_arrival'), pk=pk)
+    if request.method == 'POST':
+        form = PurchaseCostSplitForm(request.POST, instance=split)
+        if form.is_valid():
+            form.save()
+            messages.success(request, '费用分摊更新成功！')
+            return redirect('kiln_app:cost_split_list')
+    else:
+        form = PurchaseCostSplitForm(instance=split)
+    return render(request, 'kiln_app/cost_split_form.html', {'form': form, 'action': '编辑', 'split': split})
+
+
+def cost_split_delete(request, pk):
+    split = get_object_or_404(PurchaseCostSplit, pk=pk)
+    try:
+        split.delete()
+        messages.success(request, '费用分摊已删除！')
+    except Exception as e:
+        messages.error(request, f'删除失败：{str(e)}')
+    return redirect('kiln_app:cost_split_list')
+
+
+def batch_cost_list(request):
+    costs = BatchCost.objects.select_related('batch', 'batch__kiln').all()
+    batch_filter = request.GET.get('batch', '')
+    date_from = request.GET.get('date_from', '')
+    date_to = request.GET.get('date_to', '')
+
+    if batch_filter:
+        costs = costs.filter(Q(batch__batch_no__icontains=batch_filter))
+    if date_from:
+        costs = costs.filter(calculate_date__date__gte=date_from)
+    if date_to:
+        costs = costs.filter(calculate_date__date__lte=date_to)
+
+    context = {
+        'costs': costs,
+        'batch_filter': batch_filter,
+        'date_from': date_from,
+        'date_to': date_to,
+    }
+    return render(request, 'kiln_app/batch_cost_list.html', context)
+
+
+def batch_cost_create(request):
+    if request.method == 'POST':
+        form = BatchCostForm(request.POST)
+        if form.is_valid():
+            cost = form.save(commit=False)
+            if cost.batch:
+                issues = cost.batch.material_issues.filter(status='completed').select_related('material_batch')
+                material_cost = 0
+                for issue in issues:
+                    if issue.material_batch.unit_price:
+                        material_cost += float(issue.weight) * float(issue.material_batch.unit_price)
+                cost.material_cost = round(material_cost, 2)
+            cost.save()
+            messages.success(request, '批次成本创建成功！')
+            return redirect('kiln_app:batch_cost_detail', pk=cost.pk)
+    else:
+        form = BatchCostForm()
+    return render(request, 'kiln_app/batch_cost_form.html', {'form': form, 'action': '创建'})
+
+
+def batch_cost_edit(request, pk):
+    cost = get_object_or_404(BatchCost.objects.select_related('batch'), pk=pk)
+    if request.method == 'POST':
+        form = BatchCostForm(request.POST, instance=cost)
+        if form.is_valid():
+            form.save()
+            messages.success(request, '批次成本更新成功！')
+            return redirect('kiln_app:batch_cost_detail', pk=cost.pk)
+    else:
+        form = BatchCostForm(instance=cost)
+    return render(request, 'kiln_app/batch_cost_form.html', {'form': form, 'action': '编辑', 'cost': cost})
+
+
+def batch_cost_delete(request, pk):
+    cost = get_object_or_404(BatchCost, pk=pk)
+    try:
+        cost.delete()
+        messages.success(request, '批次成本已删除！')
+    except Exception as e:
+        messages.error(request, f'删除失败：{str(e)}')
+    return redirect('kiln_app:batch_cost_list')
+
+
+def batch_cost_detail(request, pk):
+    cost = get_object_or_404(BatchCost.objects.select_related('batch', 'batch__kiln', 'batch__rating'), pk=pk)
+    items = cost.cost_items.all()
+
+    cost_breakdown_labels = []
+    cost_breakdown_data = []
+    cost_breakdown_colors = [
+        'rgba(54, 162, 235, 0.8)', 'rgba(255, 99, 132, 0.8)',
+        'rgba(255, 206, 86, 0.8)', 'rgba(75, 192, 192, 0.8)',
+        'rgba(153, 102, 255, 0.8)', 'rgba(255, 159, 64, 0.8)',
+        'rgba(199, 199, 199, 0.8)',
+    ]
+
+    cost_fields = [
+        ('原料成本', cost.material_cost),
+        ('人工成本', cost.labor_cost),
+        ('燃料成本', cost.fuel_cost),
+        ('电力成本', cost.electricity_cost),
+        ('设备折旧', cost.depreciation_cost),
+        ('维护成本', cost.maintenance_cost),
+        ('其他成本', cost.other_cost),
+    ]
+
+    for label, value in cost_fields:
+        if value and float(value) > 0:
+            cost_breakdown_labels.append(label)
+            cost_breakdown_data.append(float(value))
+
+    profit_labels = ['总成本', '销售收入', '利润']
+    profit_data = [
+        float(cost.total_cost) if cost.total_cost else 0,
+        float(cost.sales_amount) if cost.sales_amount else 0,
+        float(cost.profit) if cost.profit else 0,
+    ]
+    profit_colors = [
+        'rgba(255, 99, 132, 0.8)',
+        'rgba(75, 192, 192, 0.8)',
+        'rgba(54, 162, 235, 0.8)',
+    ]
+
+    context = {
+        'cost': cost,
+        'items': items,
+        'cost_breakdown_labels_json': json.dumps(cost_breakdown_labels),
+        'cost_breakdown_data_json': json.dumps(cost_breakdown_data),
+        'cost_breakdown_colors_json': json.dumps(cost_breakdown_colors[:len(cost_breakdown_labels)]),
+        'profit_labels_json': json.dumps(profit_labels),
+        'profit_data_json': json.dumps(profit_data),
+        'profit_colors_json': json.dumps(profit_colors),
+    }
+    return render(request, 'kiln_app/batch_cost_detail.html', context)
+
+
+def batch_cost_item_add(request, cost_pk):
+    cost = get_object_or_404(BatchCost, pk=cost_pk)
+    if request.method == 'POST':
+        form = BatchCostItemForm(request.POST)
+        if form.is_valid():
+            item = form.save(commit=False)
+            item.batch_cost = cost
+            item.save()
+
+            cost_type_map = {
+                'material': 'material_cost',
+                'labor': 'labor_cost',
+                'fuel': 'fuel_cost',
+                'electricity': 'electricity_cost',
+                'depreciation': 'depreciation_cost',
+                'maintenance': 'maintenance_cost',
+                'other': 'other_cost',
+            }
+            field_name = cost_type_map.get(item.cost_type)
+            if field_name:
+                current = float(getattr(cost, field_name) or 0)
+                setattr(cost, field_name, round(current + float(item.amount), 2))
+                cost.save()
+
+            messages.success(request, '成本明细项添加成功！')
+            return redirect('kiln_app:batch_cost_detail', pk=cost.pk)
+    else:
+        form = BatchCostItemForm()
+    return render(request, 'kiln_app/batch_cost_item_form.html', {'form': form, 'cost': cost})
+
+
+def batch_cost_item_delete(request, pk):
+    item = get_object_or_404(BatchCostItem, pk=pk)
+    cost_pk = item.batch_cost.pk
+    cost = item.batch_cost
+
+    cost_type_map = {
+        'material': 'material_cost',
+        'labor': 'labor_cost',
+        'fuel': 'fuel_cost',
+        'electricity': 'electricity_cost',
+        'depreciation': 'depreciation_cost',
+        'maintenance': 'maintenance_cost',
+        'other': 'other_cost',
+    }
+    field_name = cost_type_map.get(item.cost_type)
+    if field_name:
+        current = float(getattr(cost, field_name) or 0)
+        setattr(cost, field_name, round(max(0, current - float(item.amount)), 2))
+        cost.save()
+
+    item.delete()
+    messages.success(request, '成本明细项已删除！')
+    return redirect('kiln_app:batch_cost_detail', pk=cost_pk)
+
+
+def cost_warning_list(request):
+    generate_cost_warnings()
+    warnings = CostWarning.objects.all()
+    type_filter = request.GET.get('warning_type', '')
+    level_filter = request.GET.get('warning_level', '')
+    resolved_filter = request.GET.get('is_resolved', '')
+
+    if type_filter:
+        warnings = warnings.filter(warning_type=type_filter)
+    if level_filter:
+        warnings = warnings.filter(warning_level=level_filter)
+    if resolved_filter:
+        warnings = warnings.filter(is_resolved=(resolved_filter == 'true'))
+
+    context = {
+        'warnings': warnings,
+        'type_filter': type_filter,
+        'level_filter': level_filter,
+        'resolved_filter': resolved_filter,
+        'warning_types': CostWarning.WARNING_TYPE,
+        'warning_levels': CostWarning.WARNING_LEVEL,
+    }
+    return render(request, 'kiln_app/cost_warning_list.html', context)
+
+
+def cost_warning_resolve(request, pk):
+    warning = get_object_or_404(CostWarning, pk=pk)
+    if request.method == 'POST':
+        form = CostWarningResolveForm(request.POST, instance=warning)
+        if form.is_valid():
+            warning = form.save(commit=False)
+            if warning.is_resolved and not warning.resolved_date:
+                warning.resolved_date = timezone.now()
+            warning.save()
+            messages.success(request, '成本预警处理完成！')
+            return redirect('kiln_app:cost_warning_list')
+    else:
+        form = CostWarningResolveForm(instance=warning)
+    return render(request, 'kiln_app/cost_warning_resolve.html', {'form': form, 'warning': warning})
+
+
+def supplier_price_comparison(request):
+    species_filter = request.GET.get('wood_species', '')
+
+    price_records = SupplierPriceHistory.objects.select_related('supplier').all()
+    if species_filter:
+        price_records = price_records.filter(wood_species=species_filter)
+
+    comparison_data = {}
+    for record in price_records:
+        key = (record.wood_species, record.supplier.id)
+        if key not in comparison_data:
+            comparison_data[key] = {
+                'wood_species': record.wood_species,
+                'wood_species_display': record.get_wood_species_display(),
+                'supplier': record.supplier,
+                'prices': [],
+                'dates': [],
+                'avg_price': 0,
+                'min_price': None,
+                'max_price': None,
+            }
+        comparison_data[key]['prices'].append(float(record.price))
+        comparison_data[key]['dates'].append(record.quote_date.strftime('%Y-%m-%d'))
+
+    for key, data in comparison_data.items():
+        if data['prices']:
+            data['avg_price'] = round(sum(data['prices']) / len(data['prices']), 2)
+            data['min_price'] = min(data['prices'])
+            data['max_price'] = max(data['prices'])
+
+    species_groups = {}
+    for key, data in comparison_data.items():
+        species = data['wood_species_display']
+        if species not in species_groups:
+            species_groups[species] = []
+        species_groups[species].append(data)
+
+    chart_labels = []
+    chart_datasets = []
+    color_palette = [
+        'rgba(54, 162, 235, 0.8)', 'rgba(255, 99, 132, 0.8)',
+        'rgba(255, 206, 86, 0.8)', 'rgba(75, 192, 192, 0.8)',
+        'rgba(153, 102, 255, 0.8)', 'rgba(255, 159, 64, 0.8)',
+    ]
+
+    all_dates = set()
+    for data in comparison_data.values():
+        all_dates.update(data['dates'])
+    all_dates = sorted(all_dates)
+    chart_labels = all_dates
+
+    for idx, (key, data) in enumerate(comparison_data.items()):
+        dataset_data = []
+        for date in all_dates:
+            if date in data['dates']:
+                pos = data['dates'].index(date)
+                dataset_data.append(data['prices'][pos])
+            else:
+                dataset_data.append(None)
+        chart_datasets.append({
+            'label': f'{data["supplier"].name} - {data["wood_species_display"]}',
+            'data': dataset_data,
+            'borderColor': color_palette[idx % len(color_palette)],
+            'backgroundColor': color_palette[idx % len(color_palette)].replace('0.8', '0.2'),
+            'tension': 0.3,
+        })
+
+    context = {
+        'species_filter': species_filter,
+        'wood_species_choices': RawMaterialBatch.WOOD_SPECIES,
+        'comparison_data': list(comparison_data.values()),
+        'species_groups': species_groups,
+        'chart_labels_json': json.dumps(chart_labels),
+        'chart_datasets_json': json.dumps(chart_datasets),
+    }
+    return render(request, 'kiln_app/supplier_price_comparison.html', context)
+
+
+def supplier_price_history_list(request):
+    history = SupplierPriceHistory.objects.select_related('supplier').all()
+    supplier_filter = request.GET.get('supplier', '')
+    species_filter = request.GET.get('wood_species', '')
+
+    if supplier_filter:
+        history = history.filter(supplier_id=supplier_filter)
+    if species_filter:
+        history = history.filter(wood_species=species_filter)
+
+    suppliers = Supplier.objects.all()
+
+    context = {
+        'history': history,
+        'supplier_filter': supplier_filter,
+        'species_filter': species_filter,
+        'suppliers': suppliers,
+        'wood_species_choices': RawMaterialBatch.WOOD_SPECIES,
+    }
+    return render(request, 'kiln_app/supplier_price_history_list.html', context)
+
+
+def supplier_price_history_create(request):
+    if request.method == 'POST':
+        form = SupplierPriceHistoryForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, '价格记录添加成功！')
+            return redirect('kiln_app:supplier_price_history_list')
+    else:
+        form = SupplierPriceHistoryForm()
+    return render(request, 'kiln_app/supplier_price_history_form.html', {'form': form, 'action': '添加'})
+
+
+def supplier_price_history_edit(request, pk):
+    history = get_object_or_404(SupplierPriceHistory.objects.select_related('supplier'), pk=pk)
+    if request.method == 'POST':
+        form = SupplierPriceHistoryForm(request.POST, instance=history)
+        if form.is_valid():
+            form.save()
+            messages.success(request, '价格记录更新成功！')
+            return redirect('kiln_app:supplier_price_history_list')
+    else:
+        form = SupplierPriceHistoryForm(instance=history)
+    return render(request, 'kiln_app/supplier_price_history_form.html', {'form': form, 'action': '编辑', 'history': history})
+
+
+def supplier_price_history_delete(request, pk):
+    history = get_object_or_404(SupplierPriceHistory, pk=pk)
+    history.delete()
+    messages.success(request, '价格记录已删除！')
+    return redirect('kiln_app:supplier_price_history_list')
+
+
+def cost_analysis(request):
+    batch_costs = BatchCost.objects.select_related('batch', 'batch__kiln').filter(
+        batch__finish_date__isnull=False,
+        total_cost__isnull=False
+    ).prefetch_related(
+        'batch__material_issues__material_batch__supplier'
+    ).order_by('-calculate_date')
+
+    date_from = request.GET.get('date_from', '')
+    date_to = request.GET.get('date_to', '')
+
+    if date_from:
+        batch_costs = batch_costs.filter(calculate_date__date__gte=date_from)
+    if date_to:
+        batch_costs = batch_costs.filter(calculate_date__date__lte=date_to)
+
+    by_supplier = {}
+    by_species = {}
+    by_moisture = {'<15%': [], '15-25%': [], '>25%': []}
+    by_storage = {'<30天': [], '30-60天': [], '>60天': []}
+    yield_by_supplier = {}
+    yield_by_species = {}
+    grade_by_supplier = {}
+    grade_by_species = {}
+
+    for bc in batch_costs:
+        batch = bc.batch
+        issues = batch.material_issues.filter(status='completed').select_related('material_batch__supplier')
+
+        total_material_weight = sum(float(issue.weight) for issue in issues)
+        avg_moisture = 0
+        avg_storage_days = 0
+        suppliers = []
+        wood_species = []
+
+        for issue in issues:
+            mb = issue.material_batch
+            suppliers.append(mb.supplier.name)
+            wood_species.append(mb.get_wood_species_display())
+            if mb.moisture_content:
+                avg_moisture += float(mb.moisture_content) * float(issue.weight)
+            avg_storage_days += mb.storage_days * float(issue.weight)
+
+        if total_material_weight > 0:
+            avg_moisture = round(avg_moisture / total_material_weight, 2)
+            avg_storage_days = round(avg_storage_days / total_material_weight, 1)
+
+        unit_cost = float(bc.unit_cost) if bc.unit_cost else 0
+        yield_rate = float(batch.yield_rate) if batch.yield_rate else 0
+
+        data_point = {
+            'batch_no': batch.batch_no,
+            'unit_cost': unit_cost,
+            'yield_rate': yield_rate,
+            'avg_moisture': avg_moisture,
+            'avg_storage_days': avg_storage_days,
+        }
+
+        for supplier in list(set(suppliers)):
+            if supplier not in by_supplier:
+                by_supplier[supplier] = []
+                yield_by_supplier[supplier] = []
+                grade_by_supplier[supplier] = {'excellent': 0, 'good': 0, 'medium': 0, 'poor': 0, 'reject': 0}
+            by_supplier[supplier].append(unit_cost)
+            yield_by_supplier[supplier].append(yield_rate)
+            if hasattr(batch, 'rating'):
+                grade_by_supplier[supplier][batch.rating.grade] += 1
+
+        for species in list(set(wood_species)):
+            if species not in by_species:
+                by_species[species] = []
+                yield_by_species[species] = []
+                grade_by_species[species] = {'excellent': 0, 'good': 0, 'medium': 0, 'poor': 0, 'reject': 0}
+            by_species[species].append(unit_cost)
+            yield_by_species[species].append(yield_rate)
+            if hasattr(batch, 'rating'):
+                grade_by_species[species][batch.rating.grade] += 1
+
+        if avg_moisture > 0:
+            if avg_moisture < 15:
+                by_moisture['<15%'].append(data_point)
+            elif avg_moisture <= 25:
+                by_moisture['15-25%'].append(data_point)
+            else:
+                by_moisture['>25%'].append(data_point)
+
+        if avg_storage_days > 0:
+            if avg_storage_days < 30:
+                by_storage['<30天'].append(data_point)
+            elif avg_storage_days <= 60:
+                by_storage['30-60天'].append(data_point)
+            else:
+                by_storage['>60天'].append(data_point)
+
+    supplier_cost_data = []
+    for supplier, costs in by_supplier.items():
+        if costs:
+            supplier_cost_data.append({
+                'name': supplier,
+                'avg_cost': round(sum(costs) / len(costs), 2),
+                'min_cost': min(costs),
+                'max_cost': max(costs),
+                'count': len(costs),
+            })
+
+    species_cost_data = []
+    for species, costs in by_species.items():
+        if costs:
+            species_cost_data.append({
+                'name': species,
+                'avg_cost': round(sum(costs) / len(costs), 2),
+                'min_cost': min(costs),
+                'max_cost': max(costs),
+                'count': len(costs),
+            })
+
+    moisture_cost_data = []
+    for key, items in by_moisture.items():
+        if items:
+            costs = [x['unit_cost'] for x in items if x['unit_cost'] > 0]
+            moisture_cost_data.append({
+                'name': key,
+                'avg_cost': round(sum(costs) / len(costs), 2) if costs else 0,
+                'count': len(items),
+            })
+
+    storage_cost_data = []
+    for key, items in by_storage.items():
+        if items:
+            costs = [x['unit_cost'] for x in items if x['unit_cost'] > 0]
+            storage_cost_data.append({
+                'name': key,
+                'avg_cost': round(sum(costs) / len(costs), 2) if costs else 0,
+                'count': len(items),
+            })
+
+    supplier_yield_data = []
+    for supplier, yields in yield_by_supplier.items():
+        if yields:
+            supplier_yield_data.append({
+                'name': supplier,
+                'avg_yield': round(sum(yields) / len(yields), 2),
+            })
+
+    species_yield_data = []
+    for species, yields in yield_by_species.items():
+        if yields:
+            species_yield_data.append({
+                'name': species,
+                'avg_yield': round(sum(yields) / len(yields), 2),
+            })
+
+    trend_labels = []
+    trend_cost_data = []
+    for bc in batch_costs[:30]:
+        trend_labels.append(bc.calculate_date.strftime('%Y-%m-%d'))
+        trend_cost_data.append(float(bc.unit_cost) if bc.unit_cost else 0)
+
+    context = {
+        'batch_costs': batch_costs,
+        'date_from': date_from,
+        'date_to': date_to,
+        'supplier_cost_data': supplier_cost_data,
+        'species_cost_data': species_cost_data,
+        'moisture_cost_data': moisture_cost_data,
+        'storage_cost_data': storage_cost_data,
+        'supplier_yield_data': supplier_yield_data,
+        'species_yield_data': species_yield_data,
+        'grade_by_supplier': grade_by_supplier,
+        'grade_by_species': grade_by_species,
+        'trend_labels_json': json.dumps(trend_labels),
+        'trend_cost_data_json': json.dumps(trend_cost_data),
+    }
+    return render(request, 'kiln_app/cost_analysis.html', context)
+
+
+def batch_profit_analysis(request):
+    batch_costs = BatchCost.objects.select_related('batch', 'batch__kiln', 'batch__rating').filter(
+        total_cost__isnull=False
+    ).order_by('-calculate_date')
+
+    date_from = request.GET.get('date_from', '')
+    date_to = request.GET.get('date_to', '')
+    profit_filter = request.GET.get('profit_status', '')
+
+    if date_from:
+        batch_costs = batch_costs.filter(calculate_date__date__gte=date_from)
+    if date_to:
+        batch_costs = batch_costs.filter(calculate_date__date__lte=date_to)
+    if profit_filter == 'profit':
+        batch_costs = batch_costs.filter(profit__gt=0)
+    elif profit_filter == 'loss':
+        batch_costs = batch_costs.filter(Q(profit__lte=0) | Q(profit__isnull=True))
+
+    profit_data = []
+    for bc in batch_costs:
+        profit_data.append({
+            'batch_no': bc.batch.batch_no,
+            'total_cost': float(bc.total_cost) if bc.total_cost else 0,
+            'sales_amount': float(bc.sales_amount) if bc.sales_amount else 0,
+            'profit': float(bc.profit) if bc.profit else 0,
+            'profit_rate': float(bc.profit_rate) if bc.profit_rate else 0,
+            'charcoal_weight': float(bc.charcoal_weight) if bc.charcoal_weight else 0,
+            'unit_cost': float(bc.unit_cost) if bc.unit_cost else 0,
+            'grade': bc.batch.rating.grade if hasattr(bc.batch, 'rating') else None,
+            'finish_date': bc.batch.finish_date,
+        })
+
+    labels = [x['batch_no'] for x in profit_data]
+    cost_data = [x['total_cost'] for x in profit_data]
+    sales_data = [x['sales_amount'] for x in profit_data]
+    profit_data_list = [x['profit'] for x in profit_data]
+
+    total_cost = sum(cost_data)
+    total_sales = sum(sales_data)
+    total_profit = sum(profit_data_list)
+    avg_profit_rate = round(sum(x['profit_rate'] for x in profit_data) / len(profit_data), 2) if profit_data else 0
+    profit_count = sum(1 for x in profit_data if x['profit'] > 0)
+    loss_count = sum(1 for x in profit_data if x['profit'] <= 0)
+
+    context = {
+        'profit_data': profit_data,
+        'date_from': date_from,
+        'date_to': date_to,
+        'profit_filter': profit_filter,
+        'total_cost': round(total_cost, 2),
+        'total_sales': round(total_sales, 2),
+        'total_profit': round(total_profit, 2),
+        'avg_profit_rate': avg_profit_rate,
+        'profit_count': profit_count,
+        'loss_count': loss_count,
+        'labels_json': json.dumps(labels),
+        'cost_data_json': json.dumps(cost_data),
+        'sales_data_json': json.dumps(sales_data),
+        'profit_data_json': json.dumps(profit_data_list),
+    }
+    return render(request, 'kiln_app/batch_profit_analysis.html', context)
+
+
+def purchase_progress(request):
+    plans = PurchasePlan.objects.select_related('supplier').all().order_by('-created_at')
+    orders = PurchaseOrder.objects.select_related('supplier', 'purchase_plan').all().order_by('-order_date')
+
+    status_filter = request.GET.get('status', '')
+    date_from = request.GET.get('date_from', '')
+    date_to = request.GET.get('date_to', '')
+
+    if status_filter:
+        plans = plans.filter(status=status_filter)
+        orders = orders.filter(status=status_filter)
+    if date_from:
+        plans = plans.filter(created_at__date__gte=date_from)
+        orders = orders.filter(order_date__gte=date_from)
+    if date_to:
+        plans = plans.filter(created_at__date__lte=date_to)
+        orders = orders.filter(order_date__lte=date_to)
+
+    total_plans = plans.count()
+    total_orders = orders.count()
+    total_ordered_weight = orders.aggregate(total=Sum('ordered_weight'))['total'] or 0
+    total_arrived_weight = orders.aggregate(total=Sum('arrivals__accepted_weight'))['total'] or 0
+    overall_progress = round(float(total_arrived_weight) / float(total_ordered_weight) * 100, 2) if total_ordered_weight > 0 else 0
+
+    plan_progress_data = []
+    for plan in plans:
+        plan_progress_data.append({
+            'plan': plan,
+            'ordered_weight': plan.executed_weight,
+            'arrived_weight': plan.arrival_weight,
+            'progress': plan.execution_rate,
+        })
+
+    order_progress_data = []
+    for order in orders:
+        order_progress_data.append({
+            'order': order,
+            'arrived_weight': order.arrived_weight,
+            'remaining_weight': order.remaining_weight,
+            'progress': order.arrival_rate,
+        })
+
+    context = {
+        'plan_progress_data': plan_progress_data,
+        'order_progress_data': order_progress_data,
+        'status_filter': status_filter,
+        'date_from': date_from,
+        'date_to': date_to,
+        'total_plans': total_plans,
+        'total_orders': total_orders,
+        'total_ordered_weight': total_ordered_weight,
+        'total_arrived_weight': total_arrived_weight,
+        'overall_progress': overall_progress,
+        'plan_status_choices': PurchasePlan.PLAN_STATUS,
+    }
+    return render(request, 'kiln_app/purchase_progress.html', context)
+
+
+def cost_warning_dashboard(request):
+    generate_cost_warnings()
+    warnings = CostWarning.objects.all()
+
+    total_count = warnings.count()
+    unresolved_count = warnings.filter(is_resolved=False).count()
+    critical_count = warnings.filter(warning_level='critical', is_resolved=False).count()
+    warning_count = warnings.filter(warning_level='warning', is_resolved=False).count()
+    info_count = warnings.filter(warning_level='info', is_resolved=False).count()
+
+    type_counts = {}
+    for wtype, wdisplay in CostWarning.WARNING_TYPE:
+        type_counts[wdisplay] = warnings.filter(warning_type=wtype, is_resolved=False).count()
+
+    recent_warnings = warnings.order_by('-warning_date')[:10]
+
+    type_labels = list(type_counts.keys())
+    type_values = list(type_counts.values())
+    type_colors = [
+        'rgba(255, 99, 132, 0.8)', 'rgba(54, 162, 235, 0.8)',
+        'rgba(255, 206, 86, 0.8)', 'rgba(75, 192, 192, 0.8)',
+        'rgba(153, 102, 255, 0.8)', 'rgba(255, 159, 64, 0.8)',
+    ]
+
+    level_labels = ['严重', '警告', '提示']
+    level_values = [critical_count, warning_count, info_count]
+    level_colors = ['rgba(220, 53, 69, 0.8)', 'rgba(255, 193, 7, 0.8)', 'rgba(13, 202, 240, 0.8)']
+
+    context = {
+        'total_count': total_count,
+        'unresolved_count': unresolved_count,
+        'critical_count': critical_count,
+        'warning_count': warning_count,
+        'info_count': info_count,
+        'type_counts': type_counts,
+        'recent_warnings': recent_warnings,
+        'type_labels_json': json.dumps(type_labels),
+        'type_values_json': json.dumps(type_values),
+        'type_colors_json': json.dumps(type_colors[:len(type_labels)]),
+        'level_labels_json': json.dumps(level_labels),
+        'level_values_json': json.dumps(level_values),
+        'level_colors_json': json.dumps(level_colors),
+    }
+    return render(request, 'kiln_app/cost_warning_dashboard.html', context)
+
+
+def generate_cost_warnings():
+    now = timezone.now()
+
+    price_records = SupplierPriceHistory.objects.all().order_by('quote_date')
+    supplier_species_prices = {}
+    for record in price_records:
+        key = (record.supplier_id, record.wood_species)
+        if key not in supplier_species_prices:
+            supplier_species_prices[key] = []
+        supplier_species_prices[key].append(record)
+
+    for key, records in supplier_species_prices.items():
+        if len(records) >= 2:
+            sorted_records = sorted(records, key=lambda x: x.quote_date)
+            old_price = float(sorted_records[-2].price)
+            new_price = float(sorted_records[-1].price)
+            if old_price > 0:
+                increase_pct = ((new_price - old_price) / old_price) * 100
+                if increase_pct >= 10:
+                    level = 'critical' if increase_pct >= 20 else 'warning'
+                    existing = CostWarning.objects.filter(
+                        warning_type='price_increase',
+                        related_object_type='SupplierPriceHistory',
+                        related_object_id=sorted_records[-1].id,
+                        is_resolved=False
+                    ).first()
+                    if not existing:
+                        CostWarning.objects.create(
+                            warning_type='price_increase',
+                            warning_level=level,
+                            related_object_type='SupplierPriceHistory',
+                            related_object_id=sorted_records[-1].id,
+                            related_object_name=f'{sorted_records[-1].supplier.name} - {sorted_records[-1].get_wood_species_display()}',
+                            current_value=new_price,
+                            threshold_value=old_price * 1.1,
+                            deviation_percent=round(increase_pct, 2),
+                            message=f'供应商{sorted_records[-1].supplier.name}的{sorted_records[-1].get_wood_species_display()}价格上涨{round(increase_pct, 2)}%，从{old_price}元/kg涨至{new_price}元/kg。',
+                        )
+
+    batch_costs = BatchCost.objects.filter(total_cost__isnull=False)
+    for bc in batch_costs:
+        if bc.selling_price and bc.total_cost:
+            sales_amount = float(bc.selling_price) * float(bc.charcoal_weight) if bc.charcoal_weight else 0
+            profit = sales_amount - float(bc.total_cost)
+            profit_rate = (profit / sales_amount * 100) if sales_amount > 0 else 0
+
+            if profit < 0:
+                existing = CostWarning.objects.filter(
+                    warning_type='negative_profit',
+                    related_object_type='BatchCost',
+                    related_object_id=bc.id,
+                    is_resolved=False
+                ).first()
+                if not existing:
+                    CostWarning.objects.create(
+                        warning_type='negative_profit',
+                        warning_level='critical',
+                        related_object_type='BatchCost',
+                        related_object_id=bc.id,
+                        related_object_name=bc.batch.batch_no,
+                        current_value=round(profit, 2),
+                        threshold_value=0,
+                        deviation_percent=round(profit_rate, 2),
+                        message=f'批次{bc.batch.batch_no}出现亏损，亏损金额{abs(round(profit, 2))}元，利润率{round(profit_rate, 2)}%。',
+                    )
+            elif profit_rate < 10:
+                existing = CostWarning.objects.filter(
+                    warning_type='low_margin',
+                    related_object_type='BatchCost',
+                    related_object_id=bc.id,
+                    is_resolved=False
+                ).first()
+                if not existing:
+                    CostWarning.objects.create(
+                        warning_type='low_margin',
+                        warning_level='warning',
+                        related_object_type='BatchCost',
+                        related_object_id=bc.id,
+                        related_object_name=bc.batch.batch_no,
+                        current_value=round(profit_rate, 2),
+                        threshold_value=10,
+                        deviation_percent=round(profit_rate - 10, 2),
+                        message=f'批次{bc.batch.batch_no}利润率偏低，仅{round(profit_rate, 2)}%，低于10%的预警阈值。',
+                    )
+
+    plans = PurchasePlan.objects.filter(status='approved')
+    for plan in plans:
+        if plan.total_budget and plan.executed_weight > 0:
+            actual_cost = 0
+            for order in plan.purchase_orders.all():
+                if order.total_amount:
+                    actual_cost += float(order.total_amount)
+            budget = float(plan.total_budget)
+            if budget > 0 and actual_cost > budget:
+                overrun_pct = ((actual_cost - budget) / budget) * 100
+                level = 'critical' if overrun_pct >= 20 else 'warning'
+                existing = CostWarning.objects.filter(
+                    warning_type='budget_overrun',
+                    related_object_type='PurchasePlan',
+                    related_object_id=plan.id,
+                    is_resolved=False
+                ).first()
+                if not existing:
+                    CostWarning.objects.create(
+                        warning_type='budget_overrun',
+                        warning_level=level,
+                        related_object_type='PurchasePlan',
+                        related_object_id=plan.id,
+                        related_object_name=plan.plan_name,
+                        current_value=round(actual_cost, 2),
+                        threshold_value=budget,
+                        deviation_percent=round(overrun_pct, 2),
+                        message=f'采购计划{plan.plan_name}预算超支{round(overrun_pct, 2)}%，预算{budget}元，实际{round(actual_cost, 2)}元。',
+                    )
+
+
+def export_purchase_csv(request):
+    report_type = request.GET.get('type', 'plan')
+
+    response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
+
+    if report_type == 'plan':
+        response['Content-Disposition'] = 'attachment; filename="purchase_plans.csv"'
+        plans = PurchasePlan.objects.select_related('supplier').all().order_by('-created_at')
+
+        writer = csv.writer(response)
+        writer.writerow([
+            '计划编号', '计划名称', '木材种类', '计划采购量(kg)', '预期单价(元/kg)',
+            '预算金额(元)', '需求日期', '意向供应商', '状态', '申请人',
+            '审批人', '审批日期', '执行进度(%)', '已到货量(kg)', '创建时间'
+        ])
+
+        for plan in plans:
+            writer.writerow([
+                plan.plan_no,
+                plan.plan_name,
+                plan.get_wood_species_display(),
+                plan.total_weight,
+                plan.expected_price or '',
+                plan.total_budget or '',
+                plan.required_date.strftime('%Y-%m-%d') if plan.required_date else '',
+                plan.supplier.name if plan.supplier else '',
+                plan.get_status_display(),
+                plan.applicant or '',
+                plan.approver or '',
+                plan.approval_date.strftime('%Y-%m-%d') if plan.approval_date else '',
+                plan.execution_rate,
+                plan.arrival_weight,
+                plan.created_at.strftime('%Y-%m-%d %H:%M'),
+            ])
+
+    elif report_type == 'order':
+        response['Content-Disposition'] = 'attachment; filename="purchase_orders.csv"'
+        orders = PurchaseOrder.objects.select_related('supplier', 'purchase_plan').all().order_by('-order_date')
+
+        writer = csv.writer(response)
+        writer.writerow([
+            '订单编号', '所属计划', '供应商', '木材种类', '订购重量(kg)',
+            '单价(元/kg)', '订单金额(元)', '付款方式', '预计交货日期',
+            '状态', '下单日期', '采购员', '已到货量(kg)', '到货进度(%)'
+        ])
+
+        for order in orders:
+            writer.writerow([
+                order.order_no,
+                order.purchase_plan.plan_no if order.purchase_plan else '',
+                order.supplier.name,
+                order.get_wood_species_display(),
+                order.ordered_weight,
+                order.unit_price,
+                order.total_amount or '',
+                order.get_payment_terms_display(),
+                order.expected_delivery_date.strftime('%Y-%m-%d') if order.expected_delivery_date else '',
+                order.get_status_display(),
+                order.order_date.strftime('%Y-%m-%d') if order.order_date else '',
+                order.buyer or '',
+                order.arrived_weight,
+                order.arrival_rate,
+            ])
+
+    elif report_type == 'arrival':
+        response['Content-Disposition'] = 'attachment; filename="purchase_arrivals.csv"'
+        arrivals = PurchaseArrival.objects.select_related(
+            'purchase_order__supplier', 'purchase_order__purchase_plan', 'material_batch'
+        ).all().order_by('-arrival_date')
+
+        writer = csv.writer(response)
+        writer.writerow([
+            '到货单号', '采购订单', '供应商', '到货时间', '送货重量(kg)',
+            '验收重量(kg)', '拒收重量(kg)', '实测含水率(%)', '检验结果',
+            '质量等级', '检验员', '仓管员', '关联原料批次'
+        ])
+
+        for arrival in arrivals:
+            writer.writerow([
+                arrival.arrival_no,
+                arrival.purchase_order.order_no,
+                arrival.purchase_order.supplier.name,
+                arrival.arrival_date.strftime('%Y-%m-%d %H:%M') if arrival.arrival_date else '',
+                arrival.delivered_weight,
+                arrival.accepted_weight,
+                arrival.rejected_weight,
+                arrival.moisture_content or '',
+                arrival.get_inspection_result_display(),
+                arrival.get_quality_grade_display() if arrival.quality_grade else '',
+                arrival.inspector or '',
+                arrival.warehouse_keeper or '',
+                arrival.material_batch.batch_no if arrival.material_batch else '',
+            ])
+
+    return response
+
+
+def export_cost_csv(request):
+    report_type = request.GET.get('type', 'batch_cost')
+
+    response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
+
+    if report_type == 'batch_cost':
+        response['Content-Disposition'] = 'attachment; filename="batch_costs.csv"'
+        costs = BatchCost.objects.select_related('batch', 'batch__kiln').all().order_by('-calculate_date')
+
+        writer = csv.writer(response)
+        writer.writerow([
+            '成本编号', '烧炭批次', '炭窑', '计算时间', '原料成本(元)', '人工成本(元)',
+            '燃料成本(元)', '电力成本(元)', '设备折旧(元)', '维护成本(元)',
+            '其他成本(元)', '总成本(元)', '成炭重量(kg)', '单位成本(元/kg)',
+            '销售单价(元/kg)', '销售收入(元)', '利润(元)', '利润率(%)'
+        ])
+
+        for cost in costs:
+            writer.writerow([
+                cost.cost_no,
+                cost.batch.batch_no,
+                cost.batch.kiln.name,
+                cost.calculate_date.strftime('%Y-%m-%d %H:%M') if cost.calculate_date else '',
+                cost.material_cost,
+                cost.labor_cost,
+                cost.fuel_cost,
+                cost.electricity_cost,
+                cost.depreciation_cost,
+                cost.maintenance_cost,
+                cost.other_cost,
+                cost.total_cost or '',
+                cost.charcoal_weight or '',
+                cost.unit_cost or '',
+                cost.selling_price or '',
+                cost.sales_amount or '',
+                cost.profit or '',
+                cost.profit_rate or '',
+            ])
+
+    elif report_type == 'profit':
+        response['Content-Disposition'] = 'attachment; filename="profit_analysis.csv"'
+        costs = BatchCost.objects.select_related('batch', 'batch__rating').filter(
+            total_cost__isnull=False
+        ).order_by('-calculate_date')
+
+        writer = csv.writer(response)
+        writer.writerow([
+            '批次编号', '成炭重量(kg)', '总成本(元)', '单位成本(元/kg)',
+            '销售单价(元/kg)', '销售收入(元)', '利润(元)', '利润率(%)',
+            '质量等级', '出窑日期'
+        ])
+
+        grade_display = dict(KilnRating.GRADE_CHOICES)
+
+        for cost in costs:
+            grade = ''
+            if hasattr(cost.batch, 'rating'):
+                grade = grade_display.get(cost.batch.rating.grade, cost.batch.rating.grade)
+            writer.writerow([
+                cost.batch.batch_no,
+                cost.charcoal_weight or '',
+                cost.total_cost,
+                cost.unit_cost or '',
+                cost.selling_price or '',
+                cost.sales_amount or '',
+                cost.profit or '',
+                cost.profit_rate or '',
+                grade,
+                cost.batch.finish_date.strftime('%Y-%m-%d') if cost.batch.finish_date else '',
+            ])
+
+    return response
+
+
+def export_price_comparison_csv(request):
+    response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
+    response['Content-Disposition'] = 'attachment; filename="price_comparison.csv"'
+
+    history = SupplierPriceHistory.objects.select_related('supplier').all().order_by('-quote_date')
+
+    writer = csv.writer(response)
+    writer.writerow([
+        '供应商', '木材种类', '报价(元/kg)', '报价日期', '最小订量(kg)',
+        '有效期至', '质量等级', '联系人', '备注'
+    ])
+
+    for record in history:
+        writer.writerow([
+            record.supplier.name,
+            record.get_wood_species_display(),
+            record.price,
+            record.quote_date.strftime('%Y-%m-%d') if record.quote_date else '',
+            record.min_order_qty or '',
+            record.valid_until.strftime('%Y-%m-%d') if record.valid_until else '',
+            record.get_quality_grade_display() if record.quality_grade else '',
+            record.contact_person or '',
+            record.notes or '',
+        ])
 
     return response

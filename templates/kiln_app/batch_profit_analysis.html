@@ -1,0 +1,275 @@
+{% extends 'base.html' %}
+
+{% block title %}批次利润分析 - 炭窑作坊管理系统{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2><i class="bi bi-piggy-bank me-2 text-success"></i>批次利润分析</h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{% url 'kiln_app:cost_analysis' %}" class="btn btn-outline-primary me-2">
+            <i class="bi bi-graph-up"></i> 成本分析
+        </a>
+        <a href="{% url 'kiln_app:purchase_progress' %}" class="btn btn-outline-info me-2">
+            <i class="bi bi-list-check"></i> 采购进度
+        </a>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">木材种类</label>
+                <select name="wood_type" class="form-select">
+                    <option value="">全部树种</option>
+                    {% for value, label in wood_type_choices %}
+                        <option value="{{ value }}" {% if wood_type_filter == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">统计周期从</label>
+                <input type="date" name="date_from" class="form-control" value="{{ date_from_filter|default:'' }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">统计周期至</label>
+                <input type="date" name="date_to" class="form-control" value="{{ date_to_filter|default:'' }}">
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <button type="submit" class="btn btn-outline-primary me-2">
+                    <i class="bi bi-filter"></i> 筛选
+                </button>
+                <a href="{% url 'kiln_app:batch_profit_analysis' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-x-circle"></i> 重置
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">批次总数</p>
+                <h3 class="mb-0 text-primary">{{ batch_count }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">总利润</p>
+                <h3 class="mb-0 text-{% if total_profit >= 0 %}success{% else %}danger{% endif %}">¥{{ total_profit|floatformat:0 }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">平均利润率</p>
+                <h3 class="mb-0 text-{% if avg_profit_rate >= 0 %}success{% else %}danger{% endif %}">{{ avg_profit_rate|floatformat:1 }}%</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">盈利批次占比</p>
+                <h3 class="mb-0 text-info">{{ profitable_ratio|floatformat:1 }}%</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-bar-chart me-2"></i>各批次利润对比</h5>
+            </div>
+            <div class="card-body">
+                <div style="height: 350px;">
+                    <canvas id="profitBarChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-graph-up me-2"></i>利润率趋势</h5>
+            </div>
+            <div class="card-body">
+                <div style="height: 350px;">
+                    <canvas id="profitRateLineChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-table me-2"></i>利润分析详情</h5>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>批次编号</th>
+                        <th>出炭日期</th>
+                        <th>木材种类</th>
+                        <th>成炭重量(吨)</th>
+                        <th>总成本(元)</th>
+                        <th>销售收入(元)</th>
+                        <th>利润(元)</th>
+                        <th>利润率</th>
+                        <th>单位利润(元/吨)</th>
+                        <th>状态</th>
+                        <th>详情</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in profit_data %}
+                    <tr {% if item.profit < 0 %}class="table-danger"{% elif item.profit_rate >= 20 %}class="table-success"{% endif %}>
+                        <td><code>{{ item.batch_no }}</code></td>
+                        <td class="small">{{ item.out_date|date:"Y-m-d" }}</td>
+                        <td>{{ item.wood_type_name }}</td>
+                        <td>{{ item.charcoal_weight|floatformat:2 }}</td>
+                        <td>¥{{ item.total_cost|floatformat:2 }}</td>
+                        <td>¥{{ item.sales_revenue|floatformat:2 }}</td>
+                        <td>
+                            <strong class="{% if item.profit >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                {% if item.profit >= 0 %}+{% endif %}¥{{ item.profit|floatformat:2 }}
+                            </strong>
+                        </td>
+                        <td>
+                            <strong class="{% if item.profit_rate >= 20 %}text-success{% elif item.profit_rate >= 10 %}text-info{% elif item.profit_rate >= 0 %}text-warning{% else %}text-danger{% endif %}">
+                                {% if item.profit_rate >= 0 %}+{% endif %}{{ item.profit_rate|floatformat:1 }}%
+                            </strong>
+                            {% if item.profit_rate >= 20 %}
+                                <span class="badge bg-success ms-1">优秀</span>
+                            {% elif item.profit_rate >= 10 %}
+                                <span class="badge bg-info ms-1">良好</span>
+                            {% elif item.profit_rate < 0 %}
+                                <span class="badge bg-danger ms-1">亏损</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <strong class="{% if item.unit_profit >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                ¥{{ item.unit_profit|floatformat:2 }}
+                            </strong>
+                        </td>
+                        <td>
+                            {% if item.profit >= 0 %}
+                                <span class="badge bg-success">盈利</span>
+                            {% else %}
+                                <span class="badge bg-danger">亏损</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{% url 'kiln_app:batch_cost_detail' item.batch_cost_id %}" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-eye"></i> 查看
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="11" class="text-center text-muted py-5">
+                            <i class="bi bi-inbox fs-1"></i>
+                            <p class="mt-2 mb-0">暂无利润数据</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const profitLabels = {{ profit_labels_json|safe }};
+const profitData = {{ profit_data_json|safe }};
+const profitColors = profitData.map(v => v >= 0 ? 'rgba(25, 135, 84, 0.8)' : 'rgba(220, 53, 69, 0.8)');
+
+new Chart(document.getElementById('profitBarChart'), {
+    type: 'bar',
+    data: {
+        labels: profitLabels,
+        datasets: [{
+            label: '利润(元)',
+            data: profitData,
+            backgroundColor: profitColors,
+            borderColor: profitColors.map(c => c.replace('0.8', '1')),
+            borderWidth: 2,
+            borderRadius: 6,
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { display: false },
+            tooltip: {
+                callbacks: {
+                    label: function(ctx) {
+                        const value = ctx.raw;
+                        return `利润: ${value >= 0 ? '+' : ''}¥${value.toFixed(2)}`;
+                    }
+                }
+            }
+        },
+        scales: {
+            x: { ticks: { maxRotation: 45, minRotation: 45 } },
+            y: { title: { display: true, text: '利润 (元)' } }
+        }
+    }
+});
+
+const rateLabels = {{ rate_labels_json|safe }};
+const rateData = {{ rate_data_json|safe }};
+
+new Chart(document.getElementById('profitRateLineChart'), {
+    type: 'line',
+    data: {
+        labels: rateLabels,
+        datasets: [{
+            label: '利润率(%)',
+            data: rateData,
+            borderColor: 'rgba(13, 110, 253, 1)',
+            backgroundColor: 'rgba(13, 110, 253, 0.1)',
+            fill: true,
+            tension: 0.3,
+            pointRadius: 4,
+            pointHoverRadius: 6,
+            pointBackgroundColor: rateData.map(v => v >= 20 ? 'rgba(25, 135, 84, 1)' : (v >= 10 ? 'rgba(13, 202, 240, 1)' : (v >= 0 ? 'rgba(255, 193, 7, 1)' : 'rgba(220, 53, 69, 1)'))),
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { display: false },
+            tooltip: {
+                callbacks: {
+                    label: function(ctx) {
+                        const value = ctx.raw;
+                        return `利润率: ${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
+                    }
+                }
+            }
+        },
+        scales: {
+            x: { title: { display: true, text: '批次' } },
+            y: { title: { display: true, text: '利润率 (%)' } }
+        }
+    }
+});
+</script>
+{% endblock %}

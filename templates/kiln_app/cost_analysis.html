@@ -1,0 +1,434 @@
+{% extends 'base.html' %}
+
+{% block title %}综合成本分析 - 炭窑作坊管理系统{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2><i class="bi bi-graph-up me-2 text-primary"></i>综合成本分析</h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{% url 'kiln_app:batch_profit_analysis' %}" class="btn btn-outline-info me-2">
+            <i class="bi bi-piggy-bank"></i> 利润分析
+        </a>
+        <a href="{% url 'kiln_app:purchase_progress' %}" class="btn btn-outline-success me-2">
+            <i class="bi bi-list-check"></i> 采购进度
+        </a>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">供应商</label>
+                <select name="supplier" class="form-select">
+                    <option value="">全部供应商</option>
+                    {% for s in suppliers %}
+                        <option value="{{ s.pk }}" {% if supplier_filter == s.pk|stringformat:"i" %}selected{% endif %}>{{ s.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">木材种类</label>
+                <select name="wood_type" class="form-select">
+                    <option value="">全部树种</option>
+                    {% for value, label in wood_type_choices %}
+                        <option value="{{ value }}" {% if wood_type_filter == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">统计周期从</label>
+                <input type="date" name="date_from" class="form-control" value="{{ date_from_filter|default:'' }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">统计周期至</label>
+                <input type="date" name="date_to" class="form-control" value="{{ date_to_filter|default:'' }}">
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <button type="submit" class="btn btn-outline-primary me-2">
+                    <i class="bi bi-filter"></i> 筛选
+                </button>
+                <a href="{% url 'kiln_app:cost_analysis' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-x-circle"></i> 重置
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">批次总数</p>
+                <h3 class="mb-0 text-primary">{{ batch_count }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">平均单位成本</p>
+                <h3 class="mb-0 text-info">¥{{ avg_unit_cost|floatformat:2 }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">平均成炭率</p>
+                <h3 class="mb-0 text-success">{{ avg_charcoal_rate|floatformat:1 }}%</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">总成本</p>
+                <h3 class="mb-0 text-warning">¥{{ total_cost|floatformat:0 }}</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-bar-chart me-2"></i>按供应商平均单位成本</h5>
+            </div>
+            <div class="card-body">
+                <div style="height: 300px;">
+                    <canvas id="supplierCostChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-bar-chart me-2"></i>按树种平均单位成本</h5>
+            </div>
+            <div class="card-body">
+                <div style="height: 300px;">
+                    <canvas id="woodTypeCostChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-bar-chart me-2"></i>含水率区间成炭率对比</h5>
+            </div>
+            <div class="card-body">
+                <div style="height: 300px;">
+                    <canvas id="moistureRateChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-bar-chart me-2"></i>存放时长成炭率对比</h5>
+            </div>
+            <div class="card-body">
+                <div style="height: 300px;">
+                    <canvas id="storageRateChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-pie-chart me-2"></i>供应商评级分布</h5>
+            </div>
+            <div class="card-body">
+                <div style="height: 300px;">
+                    <canvas id="supplierRatingChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-graph-up me-2"></i>成本趋势</h5>
+            </div>
+            <div class="card-body">
+                <div style="height: 300px;">
+                    <canvas id="costTrendChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-table me-2"></i>详细数据分析</h5>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>批次编号</th>
+                        <th>供应商</th>
+                        <th>木材种类</th>
+                        <th>含水率</th>
+                        <th>存放天数</th>
+                        <th>原料重量(吨)</th>
+                        <th>成炭重量(吨)</th>
+                        <th>成炭率</th>
+                        <th>总成本(元)</th>
+                        <th>单位成本(元/吨)</th>
+                        <th>供应商评级</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in analysis_data %}
+                    <tr>
+                        <td><code>{{ item.batch_no }}</code></td>
+                        <td>{{ item.supplier_name }}</td>
+                        <td>{{ item.wood_type_name }}</td>
+                        <td>{{ item.moisture_content }}%</td>
+                        <td>{{ item.storage_days }}天</td>
+                        <td>{{ item.raw_weight|floatformat:2 }}</td>
+                        <td>{{ item.charcoal_weight|floatformat:2 }}</td>
+                        <td>
+                            <strong class="{% if item.charcoal_rate >= 25 %}text-success{% elif item.charcoal_rate >= 20 %}text-warning{% else %}text-danger{% endif %}">
+                                {{ item.charcoal_rate|floatformat:1 }}%
+                            </strong>
+                        </td>
+                        <td>¥{{ item.total_cost|floatformat:2 }}</td>
+                        <td>
+                            <strong class="{% if item.unit_cost <= avg_unit_cost %}text-success{% else %}text-danger{% endif %}">
+                                ¥{{ item.unit_cost|floatformat:2 }}
+                            </strong>
+                        </td>
+                        <td>
+                            {% if item.supplier_rating == 'a' %}
+                                <span class="badge bg-success">A级</span>
+                            {% elif item.supplier_rating == 'b' %}
+                                <span class="badge bg-info">B级</span>
+                            {% elif item.supplier_rating == 'c' %}
+                                <span class="badge bg-warning text-dark">C级</span>
+                            {% else %}
+                                <span class="badge bg-secondary">D级</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="11" class="text-center text-muted py-5">
+                            <i class="bi bi-inbox fs-1"></i>
+                            <p class="mt-2 mb-0">暂无分析数据</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const supplierLabels = {{ supplier_labels_json|safe }};
+const supplierData = {{ supplier_data_json|safe }};
+const supplierColors = [
+    'rgba(75, 192, 192, 0.8)',
+    'rgba(54, 162, 235, 0.8)',
+    'rgba(255, 99, 132, 0.8)',
+    'rgba(255, 159, 64, 0.8)',
+    'rgba(153, 102, 255, 0.8)',
+];
+
+new Chart(document.getElementById('supplierCostChart'), {
+    type: 'bar',
+    data: {
+        labels: supplierLabels,
+        datasets: [{
+            label: '平均单位成本(元/吨)',
+            data: supplierData,
+            backgroundColor: supplierColors,
+            borderColor: supplierColors.map(c => c.replace('0.8', '1')),
+            borderWidth: 2,
+            borderRadius: 6,
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+            y: { title: { display: true, text: '单位成本 (元/吨)' }, beginAtZero: false }
+        }
+    }
+});
+
+const woodTypeLabels = {{ wood_type_labels_json|safe }};
+const woodTypeData = {{ wood_type_data_json|safe }};
+const woodTypeColors = [
+    'rgba(139, 69, 19, 0.8)',
+    'rgba(34, 139, 34, 0.8)',
+    'rgba(218, 165, 32, 0.8)',
+    'rgba(107, 142, 35, 0.8)',
+];
+
+new Chart(document.getElementById('woodTypeCostChart'), {
+    type: 'bar',
+    data: {
+        labels: woodTypeLabels,
+        datasets: [{
+            label: '平均单位成本(元/吨)',
+            data: woodTypeData,
+            backgroundColor: woodTypeColors,
+            borderColor: woodTypeColors.map(c => c.replace('0.8', '1')),
+            borderWidth: 2,
+            borderRadius: 6,
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+            y: { title: { display: true, text: '单位成本 (元/吨)' }, beginAtZero: false }
+        }
+    }
+});
+
+const moistureLabels = {{ moisture_labels_json|safe }};
+const moistureData = {{ moisture_data_json|safe }};
+
+new Chart(document.getElementById('moistureRateChart'), {
+    type: 'bar',
+    data: {
+        labels: moistureLabels,
+        datasets: [{
+            label: '平均成炭率(%)',
+            data: moistureData,
+            backgroundColor: 'rgba(13, 202, 240, 0.8)',
+            borderColor: 'rgba(13, 202, 240, 1)',
+            borderWidth: 2,
+            borderRadius: 6,
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+            y: { title: { display: true, text: '成炭率 (%)' }, beginAtZero: true, max: 40 }
+        }
+    }
+});
+
+const storageLabels = {{ storage_labels_json|safe }};
+const storageData = {{ storage_data_json|safe }};
+
+new Chart(document.getElementById('storageRateChart'), {
+    type: 'bar',
+    data: {
+        labels: storageLabels,
+        datasets: [{
+            label: '平均成炭率(%)',
+            data: storageData,
+            backgroundColor: 'rgba(25, 135, 84, 0.8)',
+            borderColor: 'rgba(25, 135, 84, 1)',
+            borderWidth: 2,
+            borderRadius: 6,
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+            y: { title: { display: true, text: '成炭率 (%)' }, beginAtZero: true, max: 40 }
+        }
+    }
+});
+
+const ratingLabels = {{ rating_labels_json|safe }};
+const ratingData = {{ rating_data_json|safe }};
+const ratingColors = [
+    'rgba(25, 135, 84, 0.8)',
+    'rgba(13, 110, 253, 0.8)',
+    'rgba(255, 193, 7, 0.8)',
+    'rgba(108, 117, 125, 0.8)',
+];
+
+new Chart(document.getElementById('supplierRatingChart'), {
+    type: 'doughnut',
+    data: {
+        labels: ratingLabels,
+        datasets: [{
+            data: ratingData,
+            backgroundColor: ratingColors,
+            borderColor: ratingColors.map(c => c.replace('0.8', '1')),
+            borderWidth: 2,
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { position: 'right' },
+            tooltip: {
+                callbacks: {
+                    label: function(ctx) {
+                        const value = ctx.raw;
+                        const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                        const percentage = ((value / total) * 100).toFixed(1);
+                        return `${ctx.label}: ${value}家 (${percentage}%)`;
+                    }
+                }
+            }
+        }
+    }
+});
+
+const trendLabels = {{ trend_labels_json|safe }};
+const trendData = {{ trend_data_json|safe }};
+
+new Chart(document.getElementById('costTrendChart'), {
+    type: 'line',
+    data: {
+        labels: trendLabels,
+        datasets: [{
+            label: '单位成本(元/吨)',
+            data: trendData,
+            borderColor: 'rgba(220, 53, 69, 1)',
+            backgroundColor: 'rgba(220, 53, 69, 0.1)',
+            fill: true,
+            tension: 0.3,
+            pointRadius: 4,
+            pointHoverRadius: 6,
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+            x: { title: { display: true, text: '日期' } },
+            y: { title: { display: true, text: '单位成本 (元/吨)' }, beginAtZero: false }
+        }
+    }
+});
+</script>
+{% endblock %}

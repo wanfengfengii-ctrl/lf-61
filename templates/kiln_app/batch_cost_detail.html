@@ -1,0 +1,294 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ batch_cost.cost_no }} - 批次成本详情{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2>
+            <i class="bi bi-folder2-open me-2"></i>
+            批次成本详情：<code class="fs-4">{{ batch_cost.cost_no }}</code>
+            {% if batch_cost.status == 'draft' %}
+                <span class="badge bg-secondary ms-2">草稿</span>
+            {% elif batch_cost.status == 'confirmed' %}
+                <span class="badge bg-primary ms-2">已确认</span>
+            {% else %}
+                <span class="badge bg-success ms-2">已结转</span>
+            {% endif %}
+        </h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <div class="btn-group">
+            <a href="{% url 'kiln_app:batch_cost_list' %}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> 返回列表
+            </a>
+            {% if batch_cost.status == 'draft' %}
+                <a href="{% url 'kiln_app:batch_cost_edit' batch_cost.pk %}" class="btn btn-outline-primary">
+                    <i class="bi bi-pencil"></i> 编辑
+                </a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>基本信息</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">烧炭批次</p>
+                        <p class="mb-0 fw-bold">
+                            {% if batch_cost.batch %}
+                                <a href="{% url 'kiln_app:batch_detail' batch_cost.batch.pk %}">
+                                    <code>{{ batch_cost.batch.batch_no }}</code>
+                                </a>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">成炭重量</p>
+                        <p class="mb-0 fw-bold text-primary">{{ batch_cost.charcoal_weight }} kg</p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">核算日期</p>
+                        <p class="mb-0 fw-bold">{{ batch_cost.calculation_date|date:"Y-m-d" }}</p>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">总成本</p>
+                        <p class="mb-0 fw-bold text-primary">¥{{ batch_cost.total_cost }}</p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">单位成本</p>
+                        <p class="mb-0 fw-bold">¥{{ batch_cost.unit_cost }}/kg</p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">核算人</p>
+                        <p class="mb-0 fw-bold">{{ batch_cost.calculator|default:"-" }}</p>
+                    </div>
+                </div>
+                {% if batch_cost.remarks %}
+                    <div class="row">
+                        <div class="col-md-12">
+                            <p class="text-muted small mb-1">备注</p>
+                            <p class="mb-0">{{ batch_cost.remarks }}</p>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card mb-4 border-{% if batch_cost.profit >= 0 %}success{% else %}danger{% endif %}">
+            <div class="card-header bg-{% if batch_cost.profit >= 0 %}success{% else %}danger{% endif %} text-white">
+                <h5 class="mb-0"><i class="bi bi-graph-up me-2"></i>利润分析</h5>
+            </div>
+            <div class="card-body">
+                <div class="text-center mb-3">
+                    <p class="text-muted small mb-1">销售收入</p>
+                    <h3 class="mb-0 text-success">¥{{ batch_cost.sales_revenue|default:0 }}</h3>
+                </div>
+                <div class="text-center mb-3">
+                    <p class="text-muted small mb-1">总成本</p>
+                    <h3 class="mb-0 text-primary">¥{{ batch_cost.total_cost }}</h3>
+                </div>
+                <hr>
+                <div class="text-center mb-3">
+                    <p class="text-muted small mb-1">利润</p>
+                    <h3 class="mb-0 {% if batch_cost.profit >= 0 %}text-success{% else %}text-danger{% endif %}">
+                        ¥{{ batch_cost.profit|default:0 }}
+                    </h3>
+                </div>
+                <div class="text-center">
+                    <p class="text-muted small mb-1">利润率</p>
+                    <h2 class="mb-0">
+                        <span class="badge bg-{% if batch_cost.profit_margin >= 20 %}success{% elif batch_cost.profit_margin >= 10 %}primary{% elif batch_cost.profit_margin >= 0 %}info{% else %}danger{% endif %} fs-4">
+                            {{ batch_cost.profit_margin|default:0 }}%
+                        </span>
+                    </h2>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-pie-chart me-2"></i>成本构成分析</h5>
+            </div>
+            <div class="card-body">
+                <div style="height: 300px;">
+                    <canvas id="costPieChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-bar-chart me-2"></i>与其他批次对比</h5>
+            </div>
+            <div class="card-body">
+                <div style="height: 300px;">
+                    <canvas id="compareChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-table me-2"></i>成本明细</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>成本项目</th>
+                                <th>金额(¥)</th>
+                                <th>占比</th>
+                                <th>单位成本(¥/kg)</th>
+                                <th>说明</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>原料成本</strong></td>
+                                <td><strong class="text-primary">¥{{ batch_cost.material_cost|default:0 }}</strong></td>
+                                <td>{{ batch_cost.material_cost_ratio|default:0 }}%</td>
+                                <td>¥{{ batch_cost.material_unit_cost|default:0 }}/kg</td>
+                                <td class="small">包括木材采购、运输、验收等费用</td>
+                            </tr>
+                            <tr>
+                                <td><strong>人工成本</strong></td>
+                                <td><strong class="text-primary">¥{{ batch_cost.labor_cost|default:0 }}</strong></td>
+                                <td>{{ batch_cost.labor_cost_ratio|default:0 }}%</td>
+                                <td>¥{{ batch_cost.labor_unit_cost|default:0 }}/kg</td>
+                                <td class="small">包括烧炭工、装卸工等工资</td>
+                            </tr>
+                            <tr>
+                                <td><strong>制造费用</strong></td>
+                                <td><strong class="text-primary">¥{{ batch_cost.manufacturing_cost|default:0 }}</strong></td>
+                                <td>{{ batch_cost.manufacturing_cost_ratio|default:0 }}%</td>
+                                <td>¥{{ batch_cost.manufacturing_unit_cost|default:0 }}/kg</td>
+                                <td class="small">包括燃料、水电、设备折旧等</td>
+                            </tr>
+                            <tr>
+                                <td><strong>其他费用</strong></td>
+                                <td><strong class="text-primary">¥{{ batch_cost.other_cost|default:0 }}</strong></td>
+                                <td>{{ batch_cost.other_cost_ratio|default:0 }}%</td>
+                                <td>¥{{ batch_cost.other_unit_cost|default:0 }}/kg</td>
+                                <td class="small">包括包装、仓储、管理等费用</td>
+                            </tr>
+                            <tr class="table-primary">
+                                <td><strong>合计</strong></td>
+                                <td><strong>¥{{ batch_cost.total_cost }}</strong></td>
+                                <td>100%</td>
+                                <td><strong>¥{{ batch_cost.unit_cost }}/kg</strong></td>
+                                <td></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const costLabels = {{ cost_labels_json|safe }};
+const costData = {{ cost_data_json|safe }};
+const costColors = [
+    'rgba(54, 162, 235, 0.8)',
+    'rgba(255, 99, 132, 0.8)',
+    'rgba(255, 206, 86, 0.8)',
+    'rgba(75, 192, 192, 0.8)',
+];
+
+new Chart(document.getElementById('costPieChart'), {
+    type: 'doughnut',
+    data: {
+        labels: costLabels,
+        datasets: [{
+            data: costData,
+            backgroundColor: costColors,
+            borderColor: costColors.map(c => c.replace('0.8', '1')),
+            borderWidth: 2,
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { position: 'right' },
+            tooltip: {
+                callbacks: {
+                    label: function(ctx) {
+                        const value = ctx.raw;
+                        const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                        const percentage = ((value / total) * 100).toFixed(1);
+                        return `${ctx.label}: ¥${value} (${percentage}%)`;
+                    }
+                }
+            }
+        }
+    }
+});
+
+const compareLabels = {{ compare_labels_json|safe }};
+const compareData = {{ compare_data_json|safe }};
+const currentBatchIndex = {{ current_batch_index }};
+
+new Chart(document.getElementById('compareChart'), {
+    type: 'bar',
+    data: {
+        labels: compareLabels,
+        datasets: [{
+            label: '单位成本 (¥/kg)',
+            data: compareData,
+            backgroundColor: compareData.map((v, i) => i === currentBatchIndex ? 'rgba(220, 53, 69, 0.8)' : 'rgba(54, 162, 235, 0.8)'),
+            borderColor: compareData.map((v, i) => i === currentBatchIndex ? 'rgba(220, 53, 69, 1)' : 'rgba(54, 162, 235, 1)'),
+            borderWidth: 2,
+            borderRadius: 6,
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { display: false },
+            tooltip: {
+                callbacks: {
+                    label: function(ctx) {
+                        const label = ctx.dataIndex === currentBatchIndex ? '当前批次: ' : '';
+                        return `${label}¥${ctx.raw}/kg`;
+                    }
+                }
+            }
+        },
+        scales: {
+            y: {
+                title: { display: true, text: '单位成本 (¥/kg)' },
+                beginAtZero: true
+            }
+        }
+    }
+});
+</script>
+{% endblock %}

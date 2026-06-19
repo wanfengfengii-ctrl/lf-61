@@ -1,0 +1,187 @@
+{% extends 'base.html' %}
+
+{% block title %}审批采购计划 - {{ plan.plan_no }}{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2>
+            <i class="bi bi-check2-square me-2"></i>
+            {% if plan.status == 'draft' %}提交审批{% else %}审批采购计划{% endif %}：
+            <code class="fs-4">{{ plan.plan_no }}</code>
+        </h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{% url 'kiln_app:purchase_plan_detail' plan.pk %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> 返回详情
+        </a>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-8">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>采购计划信息</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">供应商</p>
+                        <p class="mb-0 fw-bold">{{ plan.supplier.name }}</p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">木材种类</p>
+                        <p class="mb-0 fw-bold">{{ plan.get_wood_species_display }}</p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">创建人</p>
+                        <p class="mb-0 fw-bold">{{ plan.creator|default:"-" }}</p>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">计划数量</p>
+                        <p class="mb-0 fw-bold text-primary">{{ plan.plan_quantity }} kg</p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">预算金额</p>
+                        <p class="mb-0 fw-bold text-primary">¥{{ plan.budget_amount }}</p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">要求到货日期</p>
+                        <p class="mb-0 fw-bold">{{ plan.required_date|date:"Y-m-d" }}</p>
+                    </div>
+                </div>
+                {% if plan.remarks %}
+                    <div class="row">
+                        <div class="col-md-12">
+                            <p class="text-muted small mb-1">备注</p>
+                            <p class="mb-0">{{ plan.remarks }}</p>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if plan.status == 'pending' %}
+        <div class="card border-warning">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0"><i class="bi bi-exclamation-triangle me-2"></i>审批意见</h5>
+            </div>
+            <div class="card-body">
+                <form method="post" novalidate>
+                    {% csrf_token %}
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            {% for error in form.non_field_errors %}
+                                <p class="mb-0"><i class="bi bi-exclamation-circle"></i> {{ error }}</p>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+
+                    <div class="mb-3">
+                        <label class="form-label">{{ form.approval_result.label }} <span class="text-danger">*</span></label>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="approval_result" id="approve" value="approved" checked>
+                                    <label class="form-check-label text-success fw-bold" for="approve">
+                                        <i class="bi bi-check-circle-fill"></i> 批准
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="approval_result" id="reject" value="rejected">
+                                    <label class="form-check-label text-danger fw-bold" for="reject">
+                                        <i class="bi bi-x-circle-fill"></i> 拒绝
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        {% if form.approval_result.errors %}
+                            <div class="invalid-feedback d-block">
+                                {% for error in form.approval_result.errors %}{{ error }}{% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">{{ form.approval_comments.label }}</label>
+                        {{ form.approval_comments }}
+                        {% if form.approval_comments.errors %}
+                            <div class="invalid-feedback d-block">
+                                {% for error in form.approval_comments.errors %}{{ error }}{% endfor %}
+                            </div>
+                        {% endif %}
+                        <div class="form-text">请填写审批意见，拒绝时必须填写原因</div>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-circle"></i> 提交审批
+                        </button>
+                        <a href="{% url 'kiln_app:purchase_plan_detail' plan.pk %}" class="btn btn-secondary">取消</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+        {% else %}
+        <div class="card border-info">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>提交确认</h5>
+            </div>
+            <div class="card-body">
+                <p class="mb-3">确认将此采购计划提交审批？提交后将进入审批流程，无法再修改。</p>
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-success">
+                            <i class="bi bi-check-circle"></i> 确认提交
+                        </button>
+                        <a href="{% url 'kiln_app:purchase_plan_detail' plan.pk %}" class="btn btn-secondary">取消</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>审批历史</h5>
+            </div>
+            <div class="card-body p-0">
+                <div style="max-height: 400px; overflow-y: auto;">
+                    {% for record in approval_history %}
+                    <div class="p-3 border-bottom">
+                        <div class="d-flex justify-content-between align-items-start mb-1">
+                            <strong class="small">
+                                {% if record.action == 'submit' %}
+                                    <span class="text-info">提交审批</span>
+                                {% elif record.action == 'approve' %}
+                                    <span class="text-success">批准</span>
+                                {% elif record.action == 'reject' %}
+                                    <span class="text-danger">拒绝</span>
+                                {% else %}
+                                    <span class="text-secondary">{{ record.get_action_display }}</span>
+                                {% endif %}
+                            </strong>
+                            <small class="text-muted">{{ record.created_at|date:"m-d H:i" }}</small>
+                        </div>
+                        <p class="mb-1 small">操作人：{{ record.operator|default:"-" }}</p>
+                        {% if record.comments %}
+                            <p class="mb-0 small text-muted">{{ record.comments }}</p>
+                        {% endif %}
+                    </div>
+                    {% empty %}
+                    <div class="text-center text-muted py-4 small">暂无审批记录</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

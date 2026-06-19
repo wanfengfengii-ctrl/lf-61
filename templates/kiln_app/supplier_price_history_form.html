@@ -1,0 +1,159 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if form.instance.pk %}编辑{% else %}新增{% endif %}供应商价格历史{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2>
+            {% if form.instance.pk %}
+                <i class="bi bi-pencil me-2"></i>编辑价格历史
+            {% else %}
+                <i class="bi bi-plus-circle me-2"></i>新增价格历史
+            {% endif %}
+        </h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{% url 'kiln_app:supplier_price_history_list' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> 返回列表
+        </a>
+    </div>
+</div>
+
+{% if form.instance.pk and last_price %}
+<div class="card mb-4 border-info">
+    <div class="card-header bg-info text-white">
+        <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>历史参考</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-4">
+                <p class="text-muted small mb-1">上次报价日期</p>
+                <p class="mb-0 fw-bold">{{ last_price.price_date|date:"Y-m-d" }}</p>
+            </div>
+            <div class="col-md-4">
+                <p class="text-muted small mb-1">上次单价</p>
+                <p class="mb-0 fw-bold">¥{{ last_price.unit_price|floatformat:2 }}</p>
+            </div>
+            <div class="col-md-4">
+                <p class="text-muted small mb-1">上次含水率</p>
+                <p class="mb-0 fw-bold">{{ last_price.moisture_content }}%</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="card mb-4">
+    <div class="card-header bg-light">
+        <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>填写说明</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-4">
+                <p class="mb-1"><i class="bi bi-check-circle text-success"></i> 请填写供应商报价的准确日期</p>
+            </div>
+            <div class="col-md-4">
+                <p class="mb-1"><i class="bi bi-check-circle text-success"></i> 单价单位为元/吨，保留两位小数</p>
+            </div>
+            <div class="col-md-4">
+                <p class="mb-1"><i class="bi bi-check-circle text-success"></i> 含水率为木材实际含水量百分比</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="post" novalidate>
+            {% csrf_token %}
+            {% if form.non_field_errors %}
+                <div class="alert alert-danger">
+                    {% for error in form.non_field_errors %}
+                        <p class="mb-0"><i class="bi bi-exclamation-circle"></i> {{ error }}</p>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            <div class="row mb-4">
+                <div class="col-md-12 mb-3">
+                    <h6 class="fw-bold text-primary mb-3"><i class="bi bi-person me-2"></i>基本信息</h6>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">{{ form.supplier.label }} <span class="text-danger">*</span></label>
+                    {{ form.supplier }}
+                    {% if form.supplier.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.supplier.errors %}{{ error }}{% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">{{ form.wood_type.label }} <span class="text-danger">*</span></label>
+                    {{ form.wood_type }}
+                    {% if form.wood_type.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.wood_type.errors %}{{ error }}{% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="row mb-4">
+                <div class="col-md-12 mb-3">
+                    <h6 class="fw-bold text-primary mb-3"><i class="bi bi-cash me-2"></i>价格信息</h6>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">{{ form.price_date.label }} <span class="text-danger">*</span></label>
+                    {{ form.price_date }}
+                    {% if form.price_date.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.price_date.errors %}{{ error }}{% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">{{ form.unit_price.label }} (元/吨) <span class="text-danger">*</span></label>
+                    {{ form.unit_price }}
+                    {% if form.unit_price.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.unit_price.errors %}{{ error }}{% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">{{ form.moisture_content.label }} (%) <span class="text-danger">*</span></label>
+                    {{ form.moisture_content }}
+                    {% if form.moisture_content.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.moisture_content.errors %}{{ error }}{% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="row mb-4">
+                <div class="col-md-12 mb-3">
+                    <h6 class="fw-bold text-primary mb-3"><i class="bi bi-sticky me-2"></i>其他信息</h6>
+                </div>
+                <div class="col-md-12 mb-3">
+                    <label class="form-label">{{ form.remarks.label }}</label>
+                    {{ form.remarks }}
+                    {% if form.remarks.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.remarks.errors %}{{ error }}{% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-save"></i> {% if form.instance.pk %}更新{% else %}保存{% endif %}
+                </button>
+                <a href="{% url 'kiln_app:supplier_price_history_list' %}" class="btn btn-secondary">取消</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,248 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ arrival.arrival_no }} - 到货验收详情{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2>
+            <i class="bi bi-folder2-open me-2"></i>
+            到货验收详情：<code class="fs-4">{{ arrival.arrival_no }}</code>
+            {% if arrival.status == 'pending' %}
+                <span class="badge bg-warning text-dark ms-2">待验收</span>
+            {% elif arrival.status == 'qualified' %}
+                <span class="badge bg-success ms-2">验收合格</span>
+            {% elif arrival.status == 'partial' %}
+                <span class="badge bg-info ms-2">部分合格</span>
+            {% else %}
+                <span class="badge bg-danger ms-2">验收不合格</span>
+            {% endif %}
+        </h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <div class="btn-group">
+            <a href="{% url 'kiln_app:purchase_arrival_list' %}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> 返回列表
+            </a>
+            {% if arrival.status == 'pending' %}
+                <a href="{% url 'kiln_app:purchase_arrival_form' arrival.pk %}" class="btn btn-outline-warning">
+                    <i class="bi bi-check-circle"></i> 验收
+                </a>
+            {% endif %}
+            {% if arrival.status == 'qualified' or arrival.status == 'partial' %}
+                <a href="{% url 'kiln_app:cost_split_create' %}?arrival={{ arrival.pk }}" class="btn btn-outline-success">
+                    <i class="bi bi-cash-coin"></i> 费用分摊
+                </a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>到货信息</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">关联采购订单</p>
+                        <p class="mb-0 fw-bold">
+                            {% if arrival.purchase_order %}
+                                <code>{{ arrival.purchase_order.order_no }}</code>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">供应商</p>
+                        <p class="mb-0 fw-bold">{{ arrival.supplier.name }}</p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">木材种类</p>
+                        <p class="mb-0 fw-bold">{{ arrival.get_wood_species_display }}</p>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">到货数量</p>
+                        <p class="mb-0 fw-bold text-primary">{{ arrival.arrival_quantity }} kg</p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">合格数量</p>
+                        <p class="mb-0 fw-bold text-success">{{ arrival.qualified_quantity|default:0 }} kg</p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">不合格数量</p>
+                        <p class="mb-0 fw-bold text-danger">{{ arrival.unqualified_quantity|default:0 }} kg</p>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">到货日期</p>
+                        <p class="mb-0 fw-bold">{{ arrival.arrival_date|date:"Y-m-d" }}</p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">验收日期</p>
+                        <p class="mb-0 fw-bold">
+                            {% if arrival.inspection_date %}
+                                {{ arrival.inspection_date|date:"Y-m-d" }}
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">验收人</p>
+                        <p class="mb-0 fw-bold">{{ arrival.inspector|default:"-" }}</p>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">实测含水率</p>
+                        <p class="mb-0 fw-bold">
+                            {% if arrival.moisture_content %}
+                                <span class="{% if arrival.moisture_content > 25 %}text-danger{% elif arrival.moisture_content > 15 %}text-warning{% else %}text-success{% endif %}">
+                                    {{ arrival.moisture_content }}%
+                                </span>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                    <div class="col-md-8 mb-3">
+                        <p class="text-muted small mb-1">不合格原因</p>
+                        <p class="mb-0 fw-bold">
+                            {% if arrival.unqualified_reason %}
+                                {{ arrival.unqualified_reason }}
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+                {% if arrival.remarks %}
+                    <div class="row">
+                        <div class="col-md-12">
+                            <p class="text-muted small mb-1">备注</p>
+                            <p class="mb-0">{{ arrival.remarks }}</p>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-graph-up me-2"></i>验收统计</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span class="text-muted small">合格率</span>
+                        <strong>{{ arrival.qualified_rate|default:0 }}%</strong>
+                    </div>
+                    <div class="progress" style="height: 25px;">
+                        <div class="progress-bar bg-success" role="progressbar" 
+                             style="width: {{ arrival.qualified_rate|default:0 }}%;"
+                             aria-valuenow="{{ arrival.qualified_rate|default:0 }}" 
+                             aria-valuemin="0" aria-valuemax="100">
+                            {{ arrival.qualified_rate|default:0 }}%
+                        </div>
+                    </div>
+                </div>
+                <div class="row text-center small">
+                    <div class="col-md-6 mb-2">
+                        <p class="text-muted mb-1">到货数量</p>
+                        <p class="mb-0 fw-bold text-primary">{{ arrival.arrival_quantity }} kg</p>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <p class="text-muted mb-1">合格数量</p>
+                        <p class="mb-0 fw-bold text-success">{{ arrival.qualified_quantity|default:0 }} kg</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-plus-square me-2"></i>快捷操作</h5>
+            </div>
+            <div class="card-body d-grid gap-2">
+                {% if arrival.status == 'pending' %}
+                    <a href="{% url 'kiln_app:purchase_arrival_form' arrival.pk %}" class="btn btn-outline-warning">
+                        <i class="bi bi-check-circle"></i> 进行验收
+                    </a>
+                {% endif %}
+                {% if arrival.status == 'qualified' or arrival.status == 'partial' %}
+                    <a href="{% url 'kiln_app:cost_split_create' %}?arrival={{ arrival.pk }}" class="btn btn-outline-success">
+                        <i class="bi bi-cash-coin"></i> 费用分摊
+                    </a>
+                    <a href="{% url 'kiln_app:material_batch_create' %}?arrival={{ arrival.pk }}" class="btn btn-outline-primary">
+                        <i class="bi bi-box"></i> 入库登记
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-cash-coin me-2"></i>费用分摊记录</h5>
+                <span class="badge bg-secondary">{{ cost_splits|length }}</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>分摊单号</th>
+                                <th>费用类型</th>
+                                <th>费用金额</th>
+                                <th>分摊方式</th>
+                                <th>分摊数量</th>
+                                <th>单位成本</th>
+                                <th>分摊日期</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for split in cost_splits %}
+                            <tr>
+                                <td><code>{{ split.split_no }}</code></td>
+                                <td>{{ split.get_cost_type_display }}</td>
+                                <td><strong class="text-primary">¥{{ split.cost_amount }}</strong></td>
+                                <td>{{ split.get_allocation_method_display }}</td>
+                                <td>{{ split.allocation_quantity }} kg</td>
+                                <td>¥{{ split.unit_cost }}/kg</td>
+                                <td class="small">{{ split.split_date|date:"Y-m-d" }}</td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="{% url 'kiln_app:cost_split_edit' split.pk %}" class="btn btn-outline-info">
+                                            <i class="bi bi-eye"></i> 查看
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="8" class="text-center text-muted py-4 small">
+                                    暂无费用分摊记录
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,151 @@
+{% extends 'base.html' %}
+
+{% block title %}费用分摊管理 - 炭窑作坊管理系统{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2><i class="bi bi-cash-coin me-2"></i>费用分摊管理</h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{% url 'kiln_app:cost_split_create' %}" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i> 新增费用分摊
+        </a>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">分摊单号</label>
+                <input type="text" name="split_no" class="form-control" placeholder="输入分摊单号" value="{{ split_no_filter }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">费用类型</label>
+                <select name="cost_type" class="form-select">
+                    <option value="">全部类型</option>
+                    {% for value, label in cost_type_choices %}
+                        <option value="{{ value }}" {% if cost_type_filter == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">分摊方式</label>
+                <select name="allocation_method" class="form-select">
+                    <option value="">全部方式</option>
+                    {% for value, label in allocation_method_choices %}
+                        <option value="{{ value }}" {% if allocation_method_filter == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <button type="submit" class="btn btn-outline-primary me-2">
+                    <i class="bi bi-filter"></i> 筛选
+                </button>
+                <a href="{% url 'kiln_app:cost_split_list' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-x-circle"></i> 重置
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">分摊记录总数</p>
+                <h3 class="mb-0 text-primary">{{ total_splits }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">总费用金额</p>
+                <h3 class="mb-0 text-primary">¥{{ total_cost_amount }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">分摊总数量</p>
+                <h3 class="mb-0 text-info">{{ total_allocation_quantity }} kg</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">平均单位成本</p>
+                <h3 class="mb-0 text-success">¥{{ avg_unit_cost }}/kg</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>分摊单号</th>
+                        <th>关联到货</th>
+                        <th>费用类型</th>
+                        <th>费用金额</th>
+                        <th>分摊方式</th>
+                        <th>分摊数量</th>
+                        <th>单位成本</th>
+                        <th>分摊日期</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for split in cost_splits %}
+                    <tr>
+                        <td><code class="fw-bold">{{ split.split_no }}</code></td>
+                        <td>
+                            {% if split.purchase_arrival %}
+                                <code class="small">{{ split.purchase_arrival.arrival_no }}</code>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ split.get_cost_type_display }}</td>
+                        <td><strong class="text-primary">¥{{ split.cost_amount }}</strong></td>
+                        <td>{{ split.get_allocation_method_display }}</td>
+                        <td>{{ split.allocation_quantity }} kg</td>
+                        <td>
+                            <strong class="{% if split.unit_cost > avg_unit_cost %}text-danger{% else %}text-success{% endif %}">
+                                ¥{{ split.unit_cost }}/kg
+                            </strong>
+                        </td>
+                        <td class="small">{{ split.split_date|date:"Y-m-d" }}</td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <a href="{% url 'kiln_app:cost_split_edit' split.pk %}" class="btn btn-outline-info">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                <a href="{% url 'kiln_app:cost_split_edit' split.pk %}" class="btn btn-outline-primary">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="9" class="text-center text-muted py-5">
+                            <i class="bi bi-inbox fs-1"></i>
+                            <p class="mt-2 mb-0">暂无费用分摊记录，请点击上方按钮新增</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

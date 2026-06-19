@@ -72,4 +72,63 @@ urlpatterns = [
     path('material-impact/', views.material_impact_analysis, name='material_impact_analysis'),
     path('material-usage-report/', views.material_usage_report, name='material_usage_report'),
     path('export/material-csv/', views.export_material_csv, name='export_material_csv'),
+
+    # 采购计划
+    path('purchase-plans/', views.purchase_plan_list, name='purchase_plan_list'),
+    path('purchase-plans/create/', views.purchase_plan_create, name='purchase_plan_create'),
+    path('purchase-plans/<int:pk>/edit/', views.purchase_plan_edit, name='purchase_plan_edit'),
+    path('purchase-plans/<int:pk>/delete/', views.purchase_plan_delete, name='purchase_plan_delete'),
+    path('purchase-plans/<int:pk>/', views.purchase_plan_detail, name='purchase_plan_detail'),
+    path('purchase-plans/<int:pk>/approve/', views.purchase_plan_approve, name='purchase_plan_approve'),
+
+    # 采购订单
+    path('purchase-orders/', views.purchase_order_list, name='purchase_order_list'),
+    path('purchase-orders/create/', views.purchase_order_create, name='purchase_order_create'),
+    path('purchase-orders/<int:pk>/edit/', views.purchase_order_edit, name='purchase_order_edit'),
+    path('purchase-orders/<int:pk>/delete/', views.purchase_order_delete, name='purchase_order_delete'),
+    path('purchase-orders/<int:pk>/', views.purchase_order_detail, name='purchase_order_detail'),
+
+    # 到货验收
+    path('purchase-arrivals/', views.purchase_arrival_list, name='purchase_arrival_list'),
+    path('purchase-arrivals/create/', views.purchase_arrival_create, name='purchase_arrival_create'),
+    path('purchase-arrivals/<int:pk>/edit/', views.purchase_arrival_edit, name='purchase_arrival_edit'),
+    path('purchase-arrivals/<int:pk>/delete/', views.purchase_arrival_delete, name='purchase_arrival_delete'),
+    path('purchase-arrivals/<int:pk>/', views.purchase_arrival_detail, name='purchase_arrival_detail'),
+
+    # 费用分摊
+    path('cost-splits/', views.cost_split_list, name='cost_split_list'),
+    path('cost-splits/create/', views.cost_split_create, name='cost_split_create'),
+    path('cost-splits/<int:pk>/edit/', views.cost_split_edit, name='cost_split_edit'),
+    path('cost-splits/<int:pk>/delete/', views.cost_split_delete, name='cost_split_delete'),
+
+    # 批次成本
+    path('batch-costs/', views.batch_cost_list, name='batch_cost_list'),
+    path('batch-costs/create/', views.batch_cost_create, name='batch_cost_create'),
+    path('batch-costs/<int:pk>/edit/', views.batch_cost_edit, name='batch_cost_edit'),
+    path('batch-costs/<int:pk>/delete/', views.batch_cost_delete, name='batch_cost_delete'),
+    path('batch-costs/<int:pk>/', views.batch_cost_detail, name='batch_cost_detail'),
+    path('batch-costs/<int:cost_pk>/items/add/', views.batch_cost_item_add, name='batch_cost_item_add'),
+    path('batch-cost-items/<int:pk>/delete/', views.batch_cost_item_delete, name='batch_cost_item_delete'),
+
+    # 成本预警
+    path('cost-warnings/', views.cost_warning_list, name='cost_warning_list'),
+    path('cost-warnings/<int:pk>/resolve/', views.cost_warning_resolve, name='cost_warning_resolve'),
+    path('cost-warning-dashboard/', views.cost_warning_dashboard, name='cost_warning_dashboard'),
+
+    # 供应商价格
+    path('supplier-price-comparison/', views.supplier_price_comparison, name='supplier_price_comparison'),
+    path('supplier-price-history/', views.supplier_price_history_list, name='supplier_price_history_list'),
+    path('supplier-price-history/create/', views.supplier_price_history_create, name='supplier_price_history_create'),
+    path('supplier-price-history/<int:pk>/edit/', views.supplier_price_history_edit, name='supplier_price_history_edit'),
+    path('supplier-price-history/<int:pk>/delete/', views.supplier_price_history_delete, name='supplier_price_history_delete'),
+
+    # 成本分析
+    path('cost-analysis/', views.cost_analysis, name='cost_analysis'),
+    path('batch-profit-analysis/', views.batch_profit_analysis, name='batch_profit_analysis'),
+    path('purchase-progress/', views.purchase_progress, name='purchase_progress'),
+
+    # 报表导出
+    path('export/purchase-csv/', views.export_purchase_csv, name='export_purchase_csv'),
+    path('export/cost-csv/', views.export_cost_csv, name='export_cost_csv'),
+    path('export/price-comparison-csv/', views.export_price_comparison_csv, name='export_price_comparison_csv'),
 ]

@@ -1,0 +1,251 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ plan.plan_no }} - 采购计划详情{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2>
+            <i class="bi bi-folder2-open me-2"></i>
+            采购计划详情：<code class="fs-4">{{ plan.plan_no }}</code>
+            {% if plan.status == 'draft' %}
+                <span class="badge bg-secondary ms-2">草稿</span>
+            {% elif plan.status == 'pending' %}
+                <span class="badge bg-warning text-dark ms-2">待审批</span>
+            {% elif plan.status == 'approved' %}
+                <span class="badge bg-info ms-2">已批准</span>
+            {% elif plan.status == 'executing' %}
+                <span class="badge bg-primary ms-2">执行中</span>
+            {% elif plan.status == 'completed' %}
+                <span class="badge bg-success ms-2">已完成</span>
+            {% elif plan.status == 'rejected' %}
+                <span class="badge bg-danger ms-2">已拒绝</span>
+            {% else %}
+                <span class="badge bg-secondary ms-2">已取消</span>
+            {% endif %}
+        </h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <div class="btn-group">
+            <a href="{% url 'kiln_app:purchase_plan_list' %}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> 返回列表
+            </a>
+            {% if plan.status == 'draft' or plan.status == 'rejected' %}
+                <a href="{% url 'kiln_app:purchase_plan_edit' plan.pk %}" class="btn btn-outline-primary">
+                    <i class="bi bi-pencil"></i> 编辑
+                </a>
+            {% endif %}
+            {% if plan.status == 'draft' %}
+                <a href="{% url 'kiln_app:purchase_plan_approve' plan.pk %}" class="btn btn-outline-success">
+                    <i class="bi bi-check-circle"></i> 提交审批
+                </a>
+            {% endif %}
+            {% if plan.status == 'pending' %}
+                <a href="{% url 'kiln_app:purchase_plan_approve' plan.pk %}" class="btn btn-outline-success">
+                    <i class="bi bi-check-circle"></i> 审批
+                </a>
+            {% endif %}
+            {% if plan.status == 'approved' %}
+                <a href="{% url 'kiln_app:purchase_order_create' %}?plan={{ plan.pk }}" class="btn btn-outline-info">
+                    <i class="bi bi-file-earmark-plus"></i> 生成订单
+                </a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>基本信息</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">供应商</p>
+                        <p class="mb-0 fw-bold">{{ plan.supplier.name }}</p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">木材种类</p>
+                        <p class="mb-0 fw-bold">{{ plan.get_wood_species_display }}</p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">创建人</p>
+                        <p class="mb-0 fw-bold">{{ plan.creator|default:"-" }}</p>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">计划数量</p>
+                        <p class="mb-0 fw-bold text-primary">{{ plan.plan_quantity }} kg</p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">预算金额</p>
+                        <p class="mb-0 fw-bold text-primary">¥{{ plan.budget_amount }}</p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">预计单价</p>
+                        <p class="mb-0 fw-bold">
+                            {% if plan.expected_unit_price %}
+                                ¥{{ plan.expected_unit_price }}/kg
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">要求到货日期</p>
+                        <p class="mb-0 fw-bold">{{ plan.required_date|date:"Y-m-d" }}</p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">创建日期</p>
+                        <p class="mb-0 fw-bold">{{ plan.created_at|date:"Y-m-d" }}</p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <p class="text-muted small mb-1">审批人</p>
+                        <p class="mb-0 fw-bold">{{ plan.approver|default:"-" }}</p>
+                    </div>
+                </div>
+                {% if plan.remarks %}
+                    <div class="row">
+                        <div class="col-md-12">
+                            <p class="text-muted small mb-1">备注</p>
+                            <p class="mb-0">{{ plan.remarks }}</p>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-graph-up me-2"></i>执行进度</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span class="text-muted small">执行进度</span>
+                        <strong>{{ plan.progress_percentage }}%</strong>
+                    </div>
+                    <div class="progress" style="height: 25px;">
+                        <div class="progress-bar bg-{% if plan.progress_percentage >= 100 %}success{% elif plan.progress_percentage >= 50 %}info{% else %}warning{% endif %}" 
+                             role="progressbar" 
+                             style="width: {{ plan.progress_percentage }}%;"
+                             aria-valuenow="{{ plan.progress_percentage }}" 
+                             aria-valuemin="0" aria-valuemax="100">
+                            {{ plan.progress_percentage }}%
+                        </div>
+                    </div>
+                </div>
+                <div class="row text-center small">
+                    <div class="col-md-6 mb-2">
+                        <p class="text-muted mb-1">已下单</p>
+                        <p class="mb-0 fw-bold text-info">{{ plan.ordered_quantity|default:0 }} kg</p>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <p class="text-muted mb-1">已到货</p>
+                        <p class="mb-0 fw-bold text-success">{{ plan.arrived_quantity|default:0 }} kg</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-plus-square me-2"></i>快捷操作</h5>
+            </div>
+            <div class="card-body d-grid gap-2">
+                {% if plan.status == 'approved' %}
+                    <a href="{% url 'kiln_app:purchase_order_create' %}?plan={{ plan.pk }}" class="btn btn-outline-primary">
+                        <i class="bi bi-file-earmark-plus"></i> 生成采购订单
+                    </a>
+                {% endif %}
+                {% if plan.status == 'executing' %}
+                    <a href="{% url 'kiln_app:purchase_arrival_create' %}" class="btn btn-outline-success">
+                        <i class="bi bi-truck"></i> 登记到货
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-file-earmark-text me-2"></i>关联采购订单</h5>
+                <span class="badge bg-secondary">{{ orders|length }}</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>订单编号</th>
+                                <th>下单日期</th>
+                                <th>订单数量</th>
+                                <th>订单金额</th>
+                                <th>到货数量</th>
+                                <th>到货进度</th>
+                                <th>状态</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for order in orders %}
+                            <tr>
+                                <td><code>{{ order.order_no }}</code></td>
+                                <td class="small">{{ order.order_date|date:"Y-m-d" }}</td>
+                                <td>{{ order.quantity }} kg</td>
+                                <td><strong class="text-primary">¥{{ order.total_amount }}</strong></td>
+                                <td>{{ order.arrived_quantity|default:0 }} kg</td>
+                                <td>
+                                    <div class="progress" style="height: 20px;">
+                                        <div class="progress-bar bg-success" role="progressbar" 
+                                             style="width: {{ order.arrival_progress }}%;"
+                                             aria-valuenow="{{ order.arrival_progress }}" 
+                                             aria-valuemin="0" aria-valuemax="100">
+                                            {{ order.arrival_progress }}%
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    {% if order.status == 'draft' %}
+                                        <span class="badge bg-secondary">草稿</span>
+                                    {% elif order.status == 'confirmed' %}
+                                        <span class="badge bg-primary">已确认</span>
+                                    {% elif order.status == 'partial' %}
+                                        <span class="badge bg-info">部分到货</span>
+                                    {% elif order.status == 'completed' %}
+                                        <span class="badge bg-success">已完成</span>
+                                    {% else %}
+                                        <span class="badge bg-danger">已取消</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{% url 'kiln_app:purchase_order_detail' order.pk %}" class="btn btn-sm btn-outline-info">
+                                        <i class="bi bi-eye"></i> 查看
+                                    </a>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="8" class="text-center text-muted py-4 small">
+                                    暂无关联订单
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

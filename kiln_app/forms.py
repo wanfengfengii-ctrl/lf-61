@@ -4,7 +4,9 @@ from django.utils import timezone
 from .models import (
     Kiln, Batch, TemperatureRecord, DamperRecord,
     SmokeStage, KilnRating, Supplier, RawMaterialBatch,
-    MoistureTest, MaterialIssue, MaterialLoss, StockWarning
+    MoistureTest, MaterialIssue, MaterialLoss, StockWarning,
+    PurchasePlan, PurchaseOrder, PurchaseArrival, PurchaseCostSplit,
+    BatchCost, BatchCostItem, CostWarning, SupplierPriceHistory
 )
 
 
@@ -537,3 +539,295 @@ class StockWarningResolveForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['resolved_by'].widget.attrs['class'] = 'form-control'
+
+
+class PurchasePlanForm(forms.ModelForm):
+    class Meta:
+        model = PurchasePlan
+        fields = [
+            'plan_no', 'plan_name', 'wood_species', 'total_weight',
+            'expected_price', 'total_budget', 'required_date',
+            'supplier', 'status', 'applicant', 'description'
+        ]
+        widgets = {
+            'required_date': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+            'wood_species': forms.Select(attrs={'class': 'form-select'}),
+            'supplier': forms.Select(attrs={'class': 'form-select'}),
+            'status': forms.Select(attrs={'class': 'form-select'}),
+            'description': forms.Textarea(attrs={'rows': 3, 'class': 'form-control'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field_name, field in self.fields.items():
+            if field_name not in [
+                'required_date', 'wood_species', 'supplier', 'status', 'description'
+            ]:
+                field.widget.attrs['class'] = 'form-control'
+        if self.instance and self.instance.required_date:
+            self.initial['required_date'] = self.instance.required_date.strftime('%Y-%m-%d')
+
+    def clean_plan_no(self):
+        plan_no = self.cleaned_data.get('plan_no')
+        if not plan_no:
+            raise ValidationError('计划编号不能为空')
+        qs = PurchasePlan.objects.filter(plan_no=plan_no)
+        if self.instance and self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise ValidationError('该计划编号已存在，不能重复')
+        return plan_no
+
+
+class PurchasePlanApprovalForm(forms.ModelForm):
+    class Meta:
+        model = PurchasePlan
+        fields = ['status', 'approver', 'approval_date', 'approval_notes']
+        widgets = {
+            'status': forms.Select(attrs={'class': 'form-select'}),
+            'approval_date': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+            'approval_notes': forms.Textarea(attrs={'rows': 3, 'class': 'form-control'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['approver'].widget.attrs['class'] = 'form-control'
+
+
+class PurchaseOrderForm(forms.ModelForm):
+    class Meta:
+        model = PurchaseOrder
+        fields = [
+            'order_no', 'purchase_plan', 'supplier', 'wood_species',
+            'ordered_weight', 'unit_price', 'total_amount',
+            'payment_terms', 'expected_delivery_date', 'status',
+            'order_date', 'contact_person', 'contact_phone', 'buyer', 'notes'
+        ]
+        widgets = {
+            'expected_delivery_date': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+            'order_date': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+            'supplier': forms.Select(attrs={'class': 'form-select'}),
+            'purchase_plan': forms.Select(attrs={'class': 'form-select'}),
+            'wood_species': forms.Select(attrs={'class': 'form-select'}),
+            'payment_terms': forms.Select(attrs={'class': 'form-select'}),
+            'status': forms.Select(attrs={'class': 'form-select'}),
+            'notes': forms.Textarea(attrs={'rows': 3, 'class': 'form-control'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field_name, field in self.fields.items():
+            if field_name not in [
+                'expected_delivery_date', 'order_date', 'supplier',
+                'purchase_plan', 'wood_species', 'payment_terms', 'status', 'notes'
+            ]:
+                field.widget.attrs['class'] = 'form-control'
+        if self.instance:
+            if self.instance.expected_delivery_date:
+                self.initial['expected_delivery_date'] = self.instance.expected_delivery_date.strftime('%Y-%m-%d')
+            if self.instance.order_date:
+                self.initial['order_date'] = self.instance.order_date.strftime('%Y-%m-%d')
+
+    def clean_order_no(self):
+        order_no = self.cleaned_data.get('order_no')
+        if not order_no:
+            raise ValidationError('订单编号不能为空')
+        qs = PurchaseOrder.objects.filter(order_no=order_no)
+        if self.instance and self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise ValidationError('该订单编号已存在，不能重复')
+        return order_no
+
+
+class PurchaseArrivalForm(forms.ModelForm):
+    class Meta:
+        model = PurchaseArrival
+        fields = [
+            'arrival_no', 'purchase_order', 'arrival_date',
+            'delivered_weight', 'accepted_weight', 'rejected_weight',
+            'moisture_content', 'inspection_result', 'quality_grade',
+            'inspector', 'inspection_notes', 'supplier_delivery',
+            'vehicle_no', 'warehouse_keeper', 'notes'
+        ]
+        widgets = {
+            'arrival_date': forms.DateTimeInput(
+                attrs={'type': 'datetime-local', 'class': 'form-control'},
+                format='%Y-%m-%dT%H:%M'
+            ),
+            'purchase_order': forms.Select(attrs={'class': 'form-select'}),
+            'inspection_result': forms.Select(attrs={'class': 'form-select'}),
+            'quality_grade': forms.Select(attrs={'class': 'form-select'}),
+            'inspection_notes': forms.Textarea(attrs={'rows': 3, 'class': 'form-control'}),
+            'notes': forms.Textarea(attrs={'rows': 3, 'class': 'form-control'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field_name, field in self.fields.items():
+            if field_name not in [
+                'arrival_date', 'purchase_order', 'inspection_result',
+                'quality_grade', 'inspection_notes', 'notes'
+            ]:
+                field.widget.attrs['class'] = 'form-control'
+        if self.instance and self.instance.arrival_date:
+            local_time = timezone.localtime(self.instance.arrival_date)
+            self.initial['arrival_date'] = local_time.strftime('%Y-%m-%dT%H:%M')
+
+    def clean_arrival_no(self):
+        arrival_no = self.cleaned_data.get('arrival_no')
+        if not arrival_no:
+            raise ValidationError('到货单号不能为空')
+        qs = PurchaseArrival.objects.filter(arrival_no=arrival_no)
+        if self.instance and self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise ValidationError('该到货单号已存在，不能重复')
+        return arrival_no
+
+    def clean(self):
+        cleaned_data = super().clean()
+        delivered = cleaned_data.get('delivered_weight')
+        accepted = cleaned_data.get('accepted_weight')
+        rejected = cleaned_data.get('rejected_weight')
+        if delivered and accepted is not None and rejected is not None:
+            if float(accepted) + float(rejected) > float(delivered):
+                self.add_error('accepted_weight', '验收重量+拒收重量不能超过送货重量')
+        return cleaned_data
+
+
+class PurchaseCostSplitForm(forms.ModelForm):
+    class Meta:
+        model = PurchaseCostSplit
+        fields = [
+            'split_no', 'purchase_arrival', 'cost_type', 'cost_amount',
+            'cost_description', 'payee', 'invoice_no', 'notes'
+        ]
+        widgets = {
+            'purchase_arrival': forms.Select(attrs={'class': 'form-select'}),
+            'cost_type': forms.Select(attrs={'class': 'form-select'}),
+            'notes': forms.Textarea(attrs={'rows': 3, 'class': 'form-control'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field_name, field in self.fields.items():
+            if field_name not in ['purchase_arrival', 'cost_type', 'notes']:
+                field.widget.attrs['class'] = 'form-control'
+
+    def clean_split_no(self):
+        split_no = self.cleaned_data.get('split_no')
+        if not split_no:
+            raise ValidationError('分摊单号不能为空')
+        qs = PurchaseCostSplit.objects.filter(split_no=split_no)
+        if self.instance and self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise ValidationError('该分摊单号已存在，不能重复')
+        return split_no
+
+
+class BatchCostForm(forms.ModelForm):
+    class Meta:
+        model = BatchCost
+        fields = [
+            'cost_no', 'batch', 'calculate_date',
+            'material_cost', 'labor_cost', 'fuel_cost', 'electricity_cost',
+            'depreciation_cost', 'maintenance_cost', 'other_cost',
+            'selling_price', 'cost_detail', 'operator', 'notes'
+        ]
+        widgets = {
+            'calculate_date': forms.DateTimeInput(
+                attrs={'type': 'datetime-local', 'class': 'form-control'},
+                format='%Y-%m-%dT%H:%M'
+            ),
+            'batch': forms.Select(attrs={'class': 'form-select'}),
+            'cost_detail': forms.Textarea(attrs={'rows': 3, 'class': 'form-control'}),
+            'notes': forms.Textarea(attrs={'rows': 3, 'class': 'form-control'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field_name, field in self.fields.items():
+            if field_name not in [
+                'calculate_date', 'batch', 'cost_detail', 'notes'
+            ]:
+                field.widget.attrs['class'] = 'form-control'
+        if self.instance and self.instance.calculate_date:
+            local_time = timezone.localtime(self.instance.calculate_date)
+            self.initial['calculate_date'] = local_time.strftime('%Y-%m-%dT%H:%M')
+
+    def clean_cost_no(self):
+        cost_no = self.cleaned_data.get('cost_no')
+        if not cost_no:
+            raise ValidationError('成本编号不能为空')
+        qs = BatchCost.objects.filter(cost_no=cost_no)
+        if self.instance and self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise ValidationError('该成本编号已存在，不能重复')
+        return cost_no
+
+
+class BatchCostItemForm(forms.ModelForm):
+    class Meta:
+        model = BatchCostItem
+        fields = [
+            'cost_type', 'item_name', 'amount', 'quantity',
+            'unit', 'unit_price', 'description'
+        ]
+        widgets = {
+            'cost_type': forms.Select(attrs={'class': 'form-select'}),
+            'description': forms.Textarea(attrs={'rows': 3, 'class': 'form-control'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field_name, field in self.fields.items():
+            if field_name not in ['cost_type', 'description']:
+                field.widget.attrs['class'] = 'form-control'
+
+
+class CostWarningResolveForm(forms.ModelForm):
+    class Meta:
+        model = CostWarning
+        fields = ['is_resolved', 'resolved_by', 'resolution_notes']
+        widgets = {
+            'resolution_notes': forms.Textarea(attrs={'rows': 3, 'class': 'form-control'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['resolved_by'].widget.attrs['class'] = 'form-control'
+
+
+class SupplierPriceHistoryForm(forms.ModelForm):
+    class Meta:
+        model = SupplierPriceHistory
+        fields = [
+            'supplier', 'wood_species', 'price', 'quote_date',
+            'min_order_qty', 'valid_until', 'quality_grade',
+            'contact_person', 'notes'
+        ]
+        widgets = {
+            'quote_date': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+            'valid_until': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+            'supplier': forms.Select(attrs={'class': 'form-select'}),
+            'wood_species': forms.Select(attrs={'class': 'form-select'}),
+            'quality_grade': forms.Select(attrs={'class': 'form-select'}),
+            'notes': forms.Textarea(attrs={'rows': 3, 'class': 'form-control'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field_name, field in self.fields.items():
+            if field_name not in [
+                'quote_date', 'valid_until', 'supplier',
+                'wood_species', 'quality_grade', 'notes'
+            ]:
+                field.widget.attrs['class'] = 'form-control'
+        if self.instance:
+            if self.instance.quote_date:
+                self.initial['quote_date'] = self.instance.quote_date.strftime('%Y-%m-%d')
+            if self.instance.valid_until:
+                self.initial['valid_until'] = self.instance.valid_until.strftime('%Y-%m-%d')

@@ -1,0 +1,288 @@
+{% extends 'base.html' %}
+
+{% block title %}供应商价格对比分析 - 炭窑作坊管理系统{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2><i class="bi bi-bar-chart-line me-2 text-success"></i>供应商价格对比分析</h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{% url 'kiln_app:supplier_price_history_list' %}" class="btn btn-outline-secondary me-2">
+            <i class="bi bi-clock-history"></i> 价格历史
+        </a>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">木材种类</label>
+                <select name="wood_type" class="form-select">
+                    <option value="">全部树种</option>
+                    {% for value, label in wood_type_choices %}
+                        <option value="{{ value }}" {% if wood_type_filter == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">供应商</label>
+                <select name="supplier" class="form-select">
+                    <option value="">全部供应商</option>
+                    {% for s in suppliers %}
+                        <option value="{{ s.pk }}" {% if supplier_filter == s.pk|stringformat:"i" %}selected{% endif %}>{{ s.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">统计月份</label>
+                <input type="month" name="month" class="form-control" value="{{ month_filter|default:'' }}">
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <button type="submit" class="btn btn-outline-primary me-2">
+                    <i class="bi bi-filter"></i> 筛选
+                </button>
+                <a href="{% url 'kiln_app:supplier_price_comparison' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-x-circle"></i> 重置
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">供应商数</p>
+                <h3 class="mb-0 text-primary">{{ supplier_count }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">最高单价</p>
+                <h3 class="mb-0 text-danger">¥{{ max_price|floatformat:2 }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">最低单价</p>
+                <h3 class="mb-0 text-success">¥{{ min_price|floatformat:2 }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="text-muted small mb-1">平均单价</p>
+                <h3 class="mb-0 text-info">¥{{ avg_price|floatformat:2 }}</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-bar-chart me-2"></i>按树种价格对比</h5>
+            </div>
+            <div class="card-body">
+                <div style="height: 350px;">
+                    <canvas id="woodTypeBarChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-graph-up me-2"></i>历史价格趋势</h5>
+            </div>
+            <div class="card-body">
+                <div style="height: 350px;">
+                    <canvas id="priceTrendLineChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-table me-2"></i>价格对比详情</h5>
+        <span class="text-muted small">共 {{ comparison_data|length }} 条记录</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>供应商</th>
+                        <th>木材种类</th>
+                        <th>报价日期</th>
+                        <th>单价(元/吨)</th>
+                        <th>含水率</th>
+                        <th>与均价差</th>
+                        <th>与最低价差</th>
+                        <th>评级</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in comparison_data %}
+                    <tr {% if item.is_lowest %}class="table-success"{% elif item.is_highest %}class="table-danger"{% endif %}>
+                        <td class="fw-bold">{{ item.supplier_name }}</td>
+                        <td>{{ item.wood_type_name }}</td>
+                        <td class="small">{{ item.price_date|date:"Y-m-d" }}</td>
+                        <td>
+                            <strong class="{% if item.is_lowest %}text-success{% elif item.is_highest %}text-danger{% endif %}">
+                                ¥{{ item.unit_price|floatformat:2 }}
+                            </strong>
+                            {% if item.is_lowest %}
+                                <span class="badge bg-success ms-1">最低</span>
+                            {% elif item.is_highest %}
+                                <span class="badge bg-danger ms-1">最高</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ item.moisture_content }}%</td>
+                        <td>
+                            {% if item.diff_from_avg > 0 %}
+                                <span class="text-danger">+¥{{ item.diff_from_avg|floatformat:2 }}</span>
+                            {% elif item.diff_from_avg < 0 %}
+                                <span class="text-success">¥{{ item.diff_from_avg|floatformat:2 }}</span>
+                            {% else %}
+                                <span class="text-muted">¥0.00</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if item.diff_from_min > 0 %}
+                                <span class="text-danger">+¥{{ item.diff_from_min|floatformat:2 }}</span>
+                            {% else %}
+                                <span class="text-success">¥0.00</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if item.rating == 'a' %}
+                                <span class="badge bg-success">A级</span>
+                            {% elif item.rating == 'b' %}
+                                <span class="badge bg-info">B级</span>
+                            {% elif item.rating == 'c' %}
+                                <span class="badge bg-warning text-dark">C级</span>
+                            {% else %}
+                                <span class="badge bg-secondary">D级</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="text-center text-muted py-5">
+                            <i class="bi bi-inbox fs-1"></i>
+                            <p class="mt-2 mb-0">暂无价格数据</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const woodTypeLabels = {{ wood_type_labels_json|safe }};
+const woodTypeDatasets = {{ wood_type_datasets_json|safe }};
+const woodTypeColors = [
+    'rgba(75, 192, 192, 0.8)',
+    'rgba(54, 162, 235, 0.8)',
+    'rgba(255, 99, 132, 0.8)',
+    'rgba(255, 159, 64, 0.8)',
+    'rgba(153, 102, 255, 0.8)',
+    'rgba(255, 206, 86, 0.8)',
+];
+
+new Chart(document.getElementById('woodTypeBarChart'), {
+    type: 'bar',
+    data: {
+        labels: woodTypeLabels,
+        datasets: woodTypeDatasets.map((ds, i) => ({
+            ...ds,
+            backgroundColor: woodTypeColors[i % woodTypeColors.length],
+            borderColor: woodTypeColors[i % woodTypeColors.length].replace('0.8', '1'),
+            borderWidth: 1,
+            borderRadius: 4,
+        }))
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { position: 'top' }
+        },
+        scales: {
+            x: {
+                title: { display: true, text: '木材种类' }
+            },
+            y: {
+                title: { display: true, text: '单价 (元/吨)' },
+                beginAtZero: false
+            }
+        }
+    }
+});
+
+const trendLabels = {{ trend_labels_json|safe }};
+const trendDatasets = {{ trend_datasets_json|safe }};
+const trendColors = [
+    'rgba(220, 53, 69, 1)',
+    'rgba(13, 110, 253, 1)',
+    'rgba(25, 135, 84, 1)',
+    'rgba(255, 193, 7, 1)',
+    'rgba(108, 117, 125, 1)',
+    'rgba(13, 202, 240, 1)',
+];
+
+new Chart(document.getElementById('priceTrendLineChart'), {
+    type: 'line',
+    data: {
+        labels: trendLabels,
+        datasets: trendDatasets.map((ds, i) => ({
+            ...ds,
+            borderColor: trendColors[i % trendColors.length],
+            backgroundColor: trendColors[i % trendColors.length].replace('1)', '0.1)'),
+            tension: 0.3,
+            pointRadius: 3,
+            pointHoverRadius: 5,
+        }))
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { position: 'top' },
+            tooltip: {
+                callbacks: {
+                    label: function(ctx) {
+                        return `${ctx.dataset.label}: ¥${ctx.raw.toFixed(2)}/吨`;
+                    }
+                }
+            }
+        },
+        scales: {
+            x: {
+                title: { display: true, text: '日期' }
+            },
+            y: {
+                title: { display: true, text: '单价 (元/吨)' },
+                beginAtZero: false
+            }
+        }
+    }
+});
+</script>
+{% endblock %}

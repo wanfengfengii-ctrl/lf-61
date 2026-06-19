@@ -69,6 +69,28 @@
                             <li><a class="dropdown-item" href="{% url 'kiln_app:stock_warning_list' %}">
                                 <i class="bi bi-bell"></i> 库存预警
                             </a></li>
+                            <li><a class="dropdown-item" href="{% url 'kiln_app:cost_warning_list' %}">
+                                <i class="bi bi-exclamation-triangle"></i> 成本预警
+                            </a></li>
+                        </ul>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
+                            <i class="bi bi-cart4"></i> 采购管理
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{% url 'kiln_app:purchase_plan_list' %}">
+                                <i class="bi bi-file-earmark-text"></i> 采购计划
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'kiln_app:purchase_order_list' %}">
+                                <i class="bi bi-receipt"></i> 采购订单
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'kiln_app:purchase_arrival_list' %}">
+                                <i class="bi bi-truck"></i> 到货验收
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'kiln_app:cost_split_list' %}">
+                                <i class="bi bi-pie-chart"></i> 费用分摊
+                            </a></li>
                         </ul>
                     </li>
                     <li class="nav-item dropdown">
@@ -81,6 +103,28 @@
                             </a></li>
                             <li><a class="dropdown-item" href="{% url 'kiln_app:material_usage_report' %}">
                                 <i class="bi bi-file-earmark-bar-graph"></i> 原料使用报表
+                            </a></li>
+                        </ul>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
+                            <i class="bi bi-calculator"></i> 成本核算
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{% url 'kiln_app:batch_cost_list' %}">
+                                <i class="bi bi-coin"></i> 批次成本
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'kiln_app:batch_profit_analysis' %}">
+                                <i class="bi bi-graph-up-arrow"></i> 批次利润分析
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'kiln_app:cost_analysis' %}">
+                                <i class="bi bi-bar-chart-line"></i> 综合成本分析
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'kiln_app:supplier_price_comparison' %}">
+                                <i class="bi bi-arrow-left-right"></i> 供应商价格对比
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'kiln_app:purchase_progress' %}">
+                                <i class="bi bi-clock-history"></i> 采购执行进度
                             </a></li>
                         </ul>
                     </li>

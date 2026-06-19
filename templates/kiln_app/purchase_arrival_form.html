@@ -1,0 +1,227 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ action }}到货验收 - 炭窑作坊管理系统{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2>
+            <i class="bi bi-{% if action == '创建' %}plus-circle{% else %}check2-square{% endif %} me-2"></i>
+            {% if action == '创建' %}登记到货{% else %}到货验收{% endif %}
+        </h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{% url 'kiln_app:purchase_arrival_list' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> 返回列表
+        </a>
+    </div>
+</div>
+
+{% if action != '创建' and arrival %}
+<div class="card mb-4">
+    <div class="card-header bg-info text-white">
+        <h6 class="mb-0"><i class="bi bi-info-circle me-2"></i>到货信息</h6>
+    </div>
+    <div class="card-body bg-light">
+        <div class="row">
+            <div class="col-md-3">
+                <p class="text-muted small mb-1">到货单号</p>
+                <p class="mb-0 fw-bold"><code>{{ arrival.arrival_no }}</code></p>
+            </div>
+            <div class="col-md-3">
+                <p class="text-muted small mb-1">供应商</p>
+                <p class="mb-0 fw-bold">{{ arrival.supplier.name }}</p>
+            </div>
+            <div class="col-md-3">
+                <p class="text-muted small mb-1">木材种类</p>
+                <p class="mb-0 fw-bold">{{ arrival.get_wood_species_display }}</p>
+            </div>
+            <div class="col-md-3">
+                <p class="text-muted small mb-1">到货数量</p>
+                <p class="mb-0 fw-bold text-primary">{{ arrival.arrival_quantity }} kg</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="card mb-4">
+    <div class="card-header bg-info text-white">
+        <h6 class="mb-0"><i class="bi bi-info-circle me-2"></i>填写说明</h6>
+    </div>
+    <div class="card-body bg-light">
+        <div class="row small">
+            <div class="col-md-4"><i class="bi bi-check2 text-success"></i> 到货单号自动生成，不可修改</div>
+            <div class="col-md-4"><i class="bi bi-check2 text-success"></i> 合格数量 + 不合格数量 = 到货数量</div>
+            <div class="col-md-4"><i class="bi bi-check2 text-success"></i> 验收后可进行费用分摊</div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="post" novalidate>
+            {% csrf_token %}
+            {% if form.non_field_errors %}
+                <div class="alert alert-danger">
+                    {% for error in form.non_field_errors %}
+                        <p class="mb-0"><i class="bi bi-exclamation-circle"></i> {{ error }}</p>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            {% if action == '创建' %}
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">{{ form.arrival_no.label }}</label>
+                    {{ form.arrival_no }}
+                    {% if form.arrival_no.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.arrival_no.errors %}{{ error }}{% endfor %}
+                        </div>
+                    {% endif %}
+                    <div class="form-text">系统自动生成</div>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">{{ form.purchase_order.label }}</label>
+                    {{ form.purchase_order }}
+                    {% if form.purchase_order.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.purchase_order.errors %}{{ error }}{% endfor %}
+                        </div>
+                    {% endif %}
+                    <div class="form-text">选择关联的采购订单（可选）</div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">{{ form.supplier.label }} <span class="text-danger">*</span></label>
+                    {{ form.supplier }}
+                    {% if form.supplier.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.supplier.errors %}{{ error }}{% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">{{ form.wood_species.label }} <span class="text-danger">*</span></label>
+                    {{ form.wood_species }}
+                    {% if form.wood_species.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.wood_species.errors %}{{ error }}{% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">{{ form.arrival_quantity.label }} <span class="text-danger">*</span></label>
+                    {{ form.arrival_quantity }}
+                    {% if form.arrival_quantity.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.arrival_quantity.errors %}{{ error }}{% endfor %}
+                        </div>
+                    {% endif %}
+                    <div class="form-text">单位：公斤(kg)</div>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">{{ form.arrival_date.label }} <span class="text-danger">*</span></label>
+                    {{ form.arrival_date }}
+                    {% if form.arrival_date.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.arrival_date.errors %}{{ error }}{% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">{{ form.qualified_quantity.label }} <span class="text-danger">*</span></label>
+                    {{ form.qualified_quantity }}
+                    {% if form.qualified_quantity.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.qualified_quantity.errors %}{{ error }}{% endfor %}
+                        </div>
+                    {% endif %}
+                    <div class="form-text">单位：公斤(kg)</div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">{{ form.unqualified_quantity.label }}</label>
+                    {{ form.unqualified_quantity }}
+                    {% if form.unqualified_quantity.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.unqualified_quantity.errors %}{{ error }}{% endfor %}
+                        </div>
+                    {% endif %}
+                    <div class="form-text">单位：公斤(kg)</div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">{{ form.unqualified_reason.label }}</label>
+                    {{ form.unqualified_reason }}
+                    {% if form.unqualified_reason.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.unqualified_reason.errors %}{{ error }}{% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">{{ form.moisture_content.label }}</label>
+                    {{ form.moisture_content }}
+                    {% if form.moisture_content.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.moisture_content.errors %}{{ error }}{% endfor %}
+                        </div>
+                    {% endif %}
+                    <div class="form-text">单位：%</div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">{{ form.inspector.label }}</label>
+                    {{ form.inspector }}
+                    {% if form.inspector.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.inspector.errors %}{{ error }}{% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">{{ form.inspection_date.label }}</label>
+                    {{ form.inspection_date }}
+                    {% if form.inspection_date.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.inspection_date.errors %}{{ error }}{% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">{{ form.remarks.label }}</label>
+                {{ form.remarks }}
+                {% if form.remarks.errors %}
+                    <div class="invalid-feedback d-block">
+                        {% for error in form.remarks.errors %}{{ error }}{% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-circle"></i> {{ action }}
+                </button>
+                {% if arrival %}
+                    <a href="{% url 'kiln_app:purchase_arrival_detail' arrival.pk %}" class="btn btn-secondary">取消</a>
+                {% else %}
+                    <a href="{% url 'kiln_app:purchase_arrival_list' %}" class="btn btn-secondary">取消</a>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

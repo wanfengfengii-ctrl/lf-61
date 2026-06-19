@@ -1,0 +1,144 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ action }}采购计划 - 炭窑作坊管理系统{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2>
+            <i class="bi bi-{% if action == '创建' %}plus-circle{% else %}pencil{% endif %} me-2"></i>
+            {{ action }}采购计划
+        </h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{% url 'kiln_app:purchase_plan_list' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> 返回列表
+        </a>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header bg-info text-white">
+        <h6 class="mb-0"><i class="bi bi-info-circle me-2"></i>填写说明</h6>
+    </div>
+    <div class="card-body bg-light">
+        <div class="row small">
+            <div class="col-md-4"><i class="bi bi-check2 text-success"></i> 计划编号自动生成，不可修改</div>
+            <div class="col-md-4"><i class="bi bi-check2 text-success"></i> 预算金额为预估金额</div>
+            <div class="col-md-4"><i class="bi bi-check2 text-success"></i> 提交后进入审批流程</div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="post" novalidate>
+            {% csrf_token %}
+            {% if form.non_field_errors %}
+                <div class="alert alert-danger">
+                    {% for error in form.non_field_errors %}
+                        <p class="mb-0"><i class="bi bi-exclamation-circle"></i> {{ error }}</p>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">{{ form.plan_no.label }}</label>
+                    {{ form.plan_no }}
+                    {% if form.plan_no.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.plan_no.errors %}{{ error }}{% endfor %}
+                        </div>
+                    {% endif %}
+                    <div class="form-text">系统自动生成</div>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">{{ form.supplier.label }} <span class="text-danger">*</span></label>
+                    {{ form.supplier }}
+                    {% if form.supplier.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.supplier.errors %}{{ error }}{% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">{{ form.wood_species.label }} <span class="text-danger">*</span></label>
+                    {{ form.wood_species }}
+                    {% if form.wood_species.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.wood_species.errors %}{{ error }}{% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">{{ form.plan_quantity.label }} <span class="text-danger">*</span></label>
+                    {{ form.plan_quantity }}
+                    {% if form.plan_quantity.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.plan_quantity.errors %}{{ error }}{% endfor %}
+                        </div>
+                    {% endif %}
+                    <div class="form-text">单位：公斤(kg)</div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">{{ form.budget_amount.label }} <span class="text-danger">*</span></label>
+                    {{ form.budget_amount }}
+                    {% if form.budget_amount.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.budget_amount.errors %}{{ error }}{% endfor %}
+                        </div>
+                    {% endif %}
+                    <div class="form-text">单位：元(¥)</div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">{{ form.expected_unit_price.label }}</label>
+                    {{ form.expected_unit_price }}
+                    {% if form.expected_unit_price.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.expected_unit_price.errors %}{{ error }}{% endfor %}
+                        </div>
+                    {% endif %}
+                    <div class="form-text">单位：元/公斤(¥/kg)</div>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">{{ form.required_date.label }} <span class="text-danger">*</span></label>
+                    {{ form.required_date }}
+                    {% if form.required_date.errors %}
+                        <div class="invalid-feedback d-block">
+                            {% for error in form.required_date.errors %}{{ error }}{% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">{{ form.remarks.label }}</label>
+                {{ form.remarks }}
+                {% if form.remarks.errors %}
+                    <div class="invalid-feedback d-block">
+                        {% for error in form.remarks.errors %}{{ error }}{% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-circle"></i> {{ action }}
+                </button>
+                {% if plan %}
+                    <a href="{% url 'kiln_app:purchase_plan_detail' plan.pk %}" class="btn btn-secondary">取消</a>
+                {% else %}
+                    <a href="{% url 'kiln_app:purchase_plan_list' %}" class="btn btn-secondary">取消</a>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
